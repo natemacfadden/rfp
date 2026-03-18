@@ -1,8 +1,33 @@
 #ifndef RANDFAN_H
 #define RANDFAN_H
 
+// HEADER
+// ======
 #include <stdint.h>
 
+/*
+**Description:**
+Constructs a random regular fan. I.e., a random regular triangulation of the
+vector configuration defined by the input vectors.
+
+Does so via pushing-style arguments.
+
+**Arguments:**
+- `vecs`:          The input vectors.
+- `dim`:           The dimension of the vector configuration.
+- `num_vecs`:      The number of vectors input.
+- `max_num_simps`: Max allowed number of simplices - to prevent writing out of
+                   simps container.
+// rng
+- `seed`:          A seed for xoshiro128** RNG. First passed through splitmix64.
+// output objects
+- `simps`:         A container for the simplices.
+- `num_simps`:     The number of simplices written.
+
+**Returns:**
+A status code according to following list:
+    FILL IN
+*/
 int randfan(
     int * vecs,
     int dim,
@@ -13,6 +38,9 @@ int randfan(
     uint32_t * num_simps
 );
 
+
+// IMPLEMENTATION
+// ==============
 #ifdef RANDFAN_IMPLEMENTATION
 
 #include <stdio.h>
@@ -199,7 +227,32 @@ int randfan(
     int max_num_simps,
     uint64_t seed,
     uint32_t * simps,
-    uint32_t * num_simps) {
+    uint32_t * num_simps)
+{
+    /*
+    **Description:**
+    Constructs a random regular fan. I.e., a random regular triangulation of the
+    vector configuration defined by the input vectors.
+
+    Does so via pushing-style arguments.
+
+    **Arguments:**
+    - `vecs`:          The input vectors.
+    - `dim`:           The dimension of the vector configuration.
+    - `num_vecs`:      The number of vectors input.
+    - `max_num_simps`: Max allowed number of simplices - to prevent writing out
+                       of simps container.
+    // rng
+    - `seed`:          A seed for xoshiro128** RNG. First passed through
+                       splitmix64.
+    // output objects
+    - `simps`:         A container for the simplices.
+    - `num_simps`:     The number of simplices written.
+
+    **Returns:**
+    A status code according to following list:
+        FILL IN
+    */
 
     // seed the RNG
     uint64_t s[2];
