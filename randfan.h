@@ -1,6 +1,12 @@
 #ifndef RANDFAN_H
 #define RANDFAN_H
 
+
+
+// copying could be reduced significantly in this code...
+
+
+
 // HEADER
 // ======
 #include <stdint.h>
@@ -43,10 +49,15 @@ int randfan(
 // ==============
 #ifdef RANDFAN_IMPLEMENTATION
 
-#include <stdio.h>
+#ifndef MAX_DIM
+#define MAX_DIM 8
+#endif
 
-// HELPER METHODS (copied in full; modifications marked)
-// --------------
+#include <stdio.h>
+#include <stdlib.h>
+
+// EXTERNAL METHODS (copied in full; modifications marked)
+// ----------------
 /*  Written in 2019 by David Blackman and Sebastiano Vigna (vigna@acm.org)
 
 To the extent possible under law, the author has dedicated all copyright
@@ -171,7 +182,7 @@ uint64_t splitmix64(uint64_t *state) {
     return z ^ (z >> 31);
 }
 
-// Fisher-Yates
+// Fisher-Yates (shuffle list)
 void fisher_yates(uint32_t * lis, uint32_t len, uint64_t* rng_state) {
     uint64_t j;
 
@@ -181,9 +192,37 @@ void fisher_yates(uint32_t * lis, uint32_t len, uint64_t* rng_state) {
     }
 }
 
+// insertion sort
+void insertion_sort(int *arr, int len) {
+    for (int i = 1; i < len; i++) {
+        int key = arr[i];
+        int j = i - 1;
+        while (j >= 0 && arr[j] > key) {
+            arr[j+1] = arr[j];
+            j--;
+        }
+        arr[j+1] = key;
+    }
+}
+
+// REGFANS CODE
+// ============
+// HELPER DATA STRUCTURES
+// ----------------------
+typedef struct {
+    int removed;         // index of removed vertex
+    int normal[MAX_DIM]; // inward-facing normal
+} Facet;
+
+typedef struct {
+    int labels[MAX_DIM];   // vertices of the simplex
+    Facet facets[MAX_DIM]; // one facet per vertex
+    int *external_facet_inds;
+    int num_external_facets;
+} Simplex;
 
 // H-REP OF N-1 SIMPLEX
-// ====================
+// --------------------
 int det(int *M, int dim) {
     // computes the dimension of M, a dim-by-dim matrix
 
@@ -268,7 +307,6 @@ void hrep(int *R, int dim, int *H) {
     }
 }
 
-
 // RANDFAN BEGINS
 // ==============
 int randfan(
@@ -304,26 +342,31 @@ int randfan(
     A status code according to following list:
         FILL IN
     */
+    // set up some variables
+    // ---------------------
+    int return_code = 0;
+
+    uint32_t labels[num_vecs]; // labels, defined as 0,1,...,num_vecs-1
+    for (uint32_t i = 0; i < num_vecs; i++) labels[i] = i;
+
+    *num_simps      = 0;
+    Simplex *_simps = malloc(max_num_simps * sizeof(Simplex)); // internal use
 
     // seed the RNG
+    // ------------
     uint64_t s[4];
     s[0] = splitmix64(&seed);
     s[1] = splitmix64(&seed);
     s[2] = splitmix64(&seed);
     s[3] = splitmix64(&seed);
 
-    // labels, defined as 0,1,...,num_vecs-1
-    uint32_t labels[num_vecs];
-    for (uint32_t i = 0; i < num_vecs; i++)
-        labels[i] = i;
-
-    // shuffle the labels using Fisher-Yates
-    fisher_yates(labels, num_vecs, s);
-
     // get an initial simplex
     // ----------------------
     int seed_simp_R[dim*dim];
     int seed_simp_H[dim*dim];
+
+    // shuffle the labels using Fisher-Yates
+    fisher_yates(labels, num_vecs, s);
 
     // begin with seed_simp = labels[0],labels[1],labels[2],...
     uint32_t _inds[dim]; // indices into the shuffled labels... defines simplex
@@ -334,34 +377,39 @@ int randfan(
         // for retrying next iteration w/ goto
         begin_loop:
 
+        // get simplex labels
+        int simp_labels[dim];
+        for (int i = 0; i < dim; i++) simp_labels[i] = labels[_inds[i]];
+        // sort them
+        insertion_sort(simp_labels, dim);
+
         // check if the current simplex contains no other vectors
         printf("[");
         for (int i=0; i<dim; ++i)
-            printf("%d,",labels[_inds[i]]);
+            printf("%d,",simp_labels[i]);
         printf("], ");
 
         // get the H-representation
         for (int i=0; i<dim; ++i) {
             for (int j=0; j<dim; ++j) {
-                seed_simp_R[dim* i+j] = vecs[dim* labels[_inds[i]]+j];
+                seed_simp_R[dim* i+j] = vecs[dim* simp_labels[i]+j];
             }
         }
         hrep(seed_simp_R, dim, seed_simp_H);
 
         // check if any other vector is included in this cone
-        for (int ilabel=0; ilabel<num_vecs; ++ilabel){
+        for (int label=0; label<num_vecs; ++label){
             // skip if this label corresponds to one explicitly in the simp
             int skip = 0;
             for (int isimp=0; isimp<dim; ++isimp) {
-                if (ilabel == _inds[isimp]) {
+                if (label == (int)simp_labels[isimp]) {
                     skip = 1;
                     break;
                 }
             }
             if (skip == 1) continue;
 
-            // label isn't part of simp - check if it's geometrically inside
-            int label = labels[ilabel];
+            // label isn't explicitly in simp - check if it's in conical hull
             int bad = 1;
             for (int ifacet=0; ifacet<dim; ++ifacet) {
                 int dot = 0;
@@ -388,10 +436,16 @@ int randfan(
         }
 
         // no bad vectors!
+        // save as formal simplex
+        //_simps[*num_simps].labels              = 
+        _simps[*num_simps].num_external_facets = dim;
         printf(":)\n");
         break;
     }
-    return 0;
+
+    end:
+        free(_simps);
+        return return_code;
 }
 
 #endif
