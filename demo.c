@@ -48,7 +48,7 @@ int main(int argc, char **argv) {
     // get random fine, regular triangulation
     // --------------------------------------
     // (just call randfan)
-    int max_num_simps = 1000000;
+    int max_num_simps = 1000;
     uint32_t* simps   = malloc(max_num_simps * sizeof(uint32_t));
     uint32_t num_simps;
 
