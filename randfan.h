@@ -145,12 +145,21 @@ int randfan(
     s[1] = splitmix64(&seed);
 
     // get a pseudorandom number
-    printf("RNG %llu\n",next(s));
-    printf("RNG %llu\n",next(s));
-    printf("RNG %llu\n",next(s));
-    printf("RNG %llu\n",next(s));
-    printf("RNG %llu\n",next(s));
-    printf("RNG %llu\n",next(s));
+    for (int i=0; i < 100000; ++i) {
+        printf("RNG %llu\n",next(s));
+    }
+
+
+    // DEBUG PRINT vecs
+    printf("[");
+    for (int vi=0; vi<num_vecs; ++vi) {
+        printf("[");
+        for (int di=0; di<dim; ++di) {
+            printf("%d,",vecs[di + vi*dim]);
+        }
+        printf("]");
+    }
+    printf("]\n");
 
     return 0;
 }

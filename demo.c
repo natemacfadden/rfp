@@ -43,13 +43,14 @@ int main(int argc, char **argv) {
     }
     int num_vecs = num_input/dim;
 
-    // debug
-    for (int i=0; i<num_input; ++i){
-        printf("%d,",vecs[i]);
-        if (i%dim==dim-1)
-            printf("\n");
+    // DEBUG - print vectors
+    if (0) {
+        for (int i=0; i<num_input; ++i){
+            printf("%d,",vecs[i]);
+            if (i%dim==dim-1)
+                printf("\n");
+        }
     }
-
 
 
     // get random fine, regular triangulation
