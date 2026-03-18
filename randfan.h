@@ -130,6 +130,15 @@ uint64_t splitmix64(uint64_t *state) {
 
 // RANDFAN BEGINS
 // ==============
+void fisher_yates(uint32_t * lis, uint32_t len, uint64_t* rng_state) {
+    uint64_t j;
+
+    for (int i=len-1; i>=0; --i) {
+        j = next(rng_state) % (i+1); // get a random index to swap
+        uint32_t tmp = lis[i]; lis[i] = lis[j]; lis[j] = tmp;
+    }
+}
+
 int randfan(
     int * vecs,
     int dim,
@@ -144,20 +153,24 @@ int randfan(
     s[0] = splitmix64(&seed);
     s[1] = splitmix64(&seed);
 
-    // get a pseudorandom number
-    for (int i=0; i < 100000; ++i) {
-        printf("RNG %llu\n",next(s));
-    }
+    // indices
+    uint32_t inds[num_vecs];
+    for (uint32_t i = 0; i < num_vecs; i++)
+        inds[i] = i;
 
+    // Fisher-Yates shuffling
+    fisher_yates(inds, num_vecs, s);
 
     // DEBUG PRINT vecs
+    int vi;
     printf("[");
-    for (int vi=0; vi<num_vecs; ++vi) {
+    for (int ii=0; ii<num_vecs; ++ii) {
+        vi = inds[ii]; // this allows the index list to shuffle
         printf("[");
         for (int di=0; di<dim; ++di) {
             printf("%d,",vecs[di + vi*dim]);
         }
-        printf("]");
+        printf("],");
     }
     printf("]\n");
 
