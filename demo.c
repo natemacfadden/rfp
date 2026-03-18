@@ -12,6 +12,7 @@
 int main(int argc, char **argv) {
     // parse input vectors
     // -------------------
+    // in row order. Ideally format "[[p0,p1,...],[q0,q1,..],...]"
     char* vecs_in = argv[1];
     int* vecs     = malloc(strlen(vecs_in) * sizeof(int)); // over-allocates
 
@@ -35,7 +36,7 @@ int main(int argc, char **argv) {
         vecs_in++;
     }
     
-    // check that lengths make sense, read #vectors if so
+    // check that lengths make sense, set #vectors if so
     if (num_input%dim != 0) {
         printf("Cannot infer dimension from input vectors...\n");
         printf("#ints=%d; #ints before first delimiter=%d\n",
@@ -43,18 +44,10 @@ int main(int argc, char **argv) {
     }
     int num_vecs = num_input/dim;
 
-    // DEBUG - print vectors
-    if (0) {
-        for (int i=0; i<num_input; ++i){
-            printf("%d,",vecs[i]);
-            if (i%dim==dim-1)
-                printf("\n");
-        }
-    }
-
 
     // get random fine, regular triangulation
     // --------------------------------------
+    // (just call randfan)
     int max_num_simps = 1000000;
     uint32_t* simps   = malloc(max_num_simps * sizeof(uint32_t));
     uint32_t num_simps;
