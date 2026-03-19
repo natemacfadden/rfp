@@ -375,6 +375,7 @@ int randfan(
 
     **Returns:**
     A status code according to following list:
+        -1: couldn't find initial simplex
         FILL IN
     */
     // set up some variables
@@ -451,17 +452,24 @@ int randfan(
         
         if (cont) {
             // increment the indices corresponding to the simplex
-            for (int i=0; i<dim-1; ++i) {
-                if (_inds[i]+1 < _inds[i+1]) {
-                    _inds[i] += 1;
-                    goto begin_seed; // retry!
-                }
+            // iterate over _inds right-to-left, trying to increment each val
+            int i = dim - 1;
+            while (i >= 0 && _inds[i] >= num_vecs - dim + i) {
+                // (second condition sees if we can update _inds[j] for j>i)
+                i--;
             }
 
-            // no hits for i<dim-1... must set i=dim-1
-            for (int i=0; i<dim-1; ++i) _inds[i] = i;
-            _inds[dim-1] += 1;
-            goto begin_seed; // retry!
+            // exhausted all combinations... error
+            // (shouldn't ever hit though)
+            if (i < 0) return -1;
+
+            // update the index i
+            _inds[i]++;
+
+            // update the indices j>i
+            for (int j = i + 1; j < dim; j++)
+                _inds[j] = _inds[i] + (j - i);
+            goto begin_seed;
         }
 
         break;
@@ -476,6 +484,7 @@ int randfan(
                 // matches a label in simp... throw it away
                 labels[i] = labels[num_labels-1];
                 num_labels--;
+                i--; // decrement i in case swapped-in matches another label
                 break;
             }
         }
@@ -483,8 +492,6 @@ int randfan(
 
     // update simp count
     (*num_simps)++;
-    printf("NUMBER LABELS %d\n",num_labels);
-    printf("NUMBER SIMPLICES %d\n",*num_simps);
 
     // build other simplices
     // ---------------------
@@ -502,7 +509,7 @@ int randfan(
             int label = labels[ilabel];
 
             // get geometric vector
-            int v[4];
+            int v[dim];
             for (int i=0; i<dim; ++i) v[i] = vecs[dim* label+i];
 
             // COMPUTE VISIBLE FACETS
@@ -523,11 +530,14 @@ int randfan(
                 }
             }
 
+            return 0;
+
             // tentatively add visible facets
             // (don't update num_simps yet in case any of these are bad)
             for (int k=0; k<external_numfacets; ++k) {
                 // grab at index >=numvecs
-                Simplex *simp = &_simps[*num_vecs+k];
+                *num_simps+k;
+                Simplex *simp = &_simps[*num_simps+k];
 
                 // collect the labels
                 simp->labels[0] = label;
@@ -536,24 +546,11 @@ int randfan(
                     // ith facet corresponds to deleting ith point
                     skipped = skipped || (i==external_ifacet[k]);
                     if (skipped) continue;
-                    simp->labels[i-skipped+1] = _simps[external_isimp[k]]->labels[i];
+                    simp->labels[i-skipped+1] = _simps[external_isimp[k]].labels[i];
                 }
 
                 // set the external facets
                 for (int i=1; i<dim; ++i) {
-                    simp->external_facet_inds[i-0] = i; // all facets begin as external
-                    for (int j=0; j<dim; ++j)
-                        simp->normals[MAX_DIM* i+j] = seed_simp_H[dim* i+j];
-                    simp->num_external_facets = dim;
-                }
-
-                // the point v
-                
-
-                // the facet
-                for (int i=1; i<dim; ++i) {
-                    simp->labels[i] = simp_labels[i];
-
                     simp->external_facet_inds[i-0] = i; // all facets begin as external
                     for (int j=0; j<dim; ++j)
                         simp->normals[MAX_DIM* i+j] = seed_simp_H[dim* i+j];
