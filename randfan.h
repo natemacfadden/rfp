@@ -580,13 +580,14 @@ int randfan(
             // tentatively add simps associated to visible facets
             // --------------------------------------------------
             // (don't update num_simps yet in case any of these are bad)
+            covered_vec = 0;
+
             for (int k=0; k<visible_numfacets; ++k) {
                 Simplex *facet_haver = &_simps[visible_isimp[k]];
 
                 // store simplex at index (*num_simps + k)
                 // i.e., store k+1 indices after the 'recorded' length
                 Simplex *simp = &_simps[*num_simps+k];
-                covered_vec   = 0;
 
                 // make the simplex
                 // ----------------
@@ -596,8 +597,9 @@ int randfan(
                 int skipped = 0;
                 for (int i=0; i<dim; ++i) {
                     // ith facet corresponds to deleting ith point
-                    skipped = skipped || (i==visible_ifacet[k]);
-                    if (i==visible_ifacet[k]) {
+                    int actual_fi = facet_haver->external_facet_inds[visible_ifacet[k]];
+                    skipped = skipped || (i==actual_fi);
+                    if (i==actual_fi) {
                         continue; // deleted point
                     }
 
@@ -639,21 +641,29 @@ int randfan(
             // ----------
             // update external facets...
             // first, remove the visible facets from being external
-            for (int k=0; k<visible_numfacets; ++k) {
-                Simplex *facet_haver = &_simps[visible_isimp[k]];
-                for (int i=0; i<facet_haver->num_external_facets; ++i) {
-                    if (i==visible_ifacet[k]) {
-                        facet_haver->external_facet_inds[i] = facet_haver->external_facet_inds[facet_haver->num_external_facets-1];
-                        facet_haver->num_external_facets--;
-                        break;
-                    }
-                }
-            }
+              for (int k=0; k<visible_numfacets; ++k) {
+                  Simplex *facet_haver = &_simps[visible_isimp[k]];
+                  int ifacet  = visible_ifacet[k];
+                  int last_idx = facet_haver->num_external_facets - 1;
+
+                  // swap-with-last removal
+                  facet_haver->external_facet_inds[ifacet] = facet_haver->external_facet_inds[last_idx];
+                  facet_haver->num_external_facets--;
+
+                  // fix up any later entries that pointed to last_idx on the same simplex
+                  for (int k2 = k+1; k2 < visible_numfacets; ++k2) {
+                      if (visible_isimp[k2] == visible_isimp[k] && visible_ifacet[k2] == last_idx) {
+                          visible_ifacet[k2] = ifacet;
+                          // (at most one such k2 exists per k)
+                      }
+                  }
+              }
             // now, remove any new facets that are included in 2x new simps
-            for (int i=0; i<visible_numfacets-1; ++i) {
+            for (int i=0; i<visible_numfacets; ++i) {
                 Simplex *simpA = &_simps[*num_simps + i];
 
-                for (int j=i+1; j<visible_numfacets; ++j) {
+                for (int j=i; j<visible_numfacets; ++j) {
+                    // start at j=i since the same simplex can have multiple visible facets
                     Simplex *simpB = &_simps[*num_simps + j];
 
                     // check if they define a shared facet
@@ -673,8 +683,9 @@ int randfan(
                             }
                             if (shared) {
                                 simpA->external_facet_inds[ifacet] = simpA->external_facet_inds[simpA->num_external_facets-1];
-                                simpB->external_facet_inds[ifacet] = simpB->external_facet_inds[simpB->num_external_facets-1];
                                 simpA->num_external_facets--;
+
+                                simpB->external_facet_inds[jfacet] = simpB->external_facet_inds[simpB->num_external_facets-1];
                                 simpB->num_external_facets--;
                                 goto next_iter;
                             }
@@ -696,6 +707,7 @@ int randfan(
                     break;
                 }
             }
+            break;
         }
     }
 
