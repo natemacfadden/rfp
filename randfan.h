@@ -1,7 +1,7 @@
 #ifndef RANDFAN_H
 #define RANDFAN_H
 
-
+//#define DEBUG
 
 // copying could be reduced significantly in this code...
 
@@ -424,21 +424,26 @@ int randfan(
     // begin with seed_simp = labels[0],labels[1],labels[2],...
     for (int i=0; i<dim; ++i) _inds[i] = i;
 
-    printf("Looking for initial simplex...");
+    // DEBUG PRINT
+    #ifdef DEBUG
+        printf("Looking for initial simplex...");
+    #endif
+
     while (1) {
         // for retrying next iteration w/ goto
         begin_seed:;
 
-        // get simplex labels
+        // get simplex labels, sort them
         for (int i = 0; i < dim; i++) simp_labels[i] = labels[_inds[i]];
-        // sort them
         insertion_sort(simp_labels, dim);
 
-        // check if the current simplex contains no other vectors
-        printf("[");
-        for (int i=0; i<dim; ++i)
-            printf("%d,",simp_labels[i]);
-        printf("], ");
+        // DEBUG PRINT
+        #ifdef DEBUG
+            printf("[");
+            for (int i=0; i<dim; ++i)
+                printf("%d,",simp_labels[i]);
+            printf("], ");
+        #endif
 
         // get the H-representation
         for (int i=0; i<dim; ++i) {
