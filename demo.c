@@ -50,7 +50,7 @@ int main(int argc, char **argv) {
     // get random fine, regular triangulation
     // --------------------------------------
     // (just call randfan)
-    int max_num_simps = 1000;
+    int max_num_simps = 100000;
     uint32_t* simps   = malloc(max_num_simps * sizeof(uint32_t));
     int num_simps;
 
@@ -59,6 +59,15 @@ int main(int argc, char **argv) {
         vecs, dim, num_vecs,
         max_num_simps, seed,
         simps, &num_simps);
+
+    for (int i=0; i<num_simps; ++i) {
+        printf("[");
+        for (int j=0; j<dim; ++j) {
+            printf("%d,", simps[dim* i+j]);
+        }
+        printf("],");
+    }
+    printf("\n");
 
 
     // free data

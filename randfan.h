@@ -332,6 +332,8 @@ void hrep(int *R, int dim, int *H) {
 
 int simp_contains(Simplex *simp, int *vecs, int dim, int *labels, int num_labels) {
     // check if the simplex `simp` contains any of the vectors in `labels`
+    // returns a label contained. If no label is contained, returns 01
+
     for (int ilabel=0; ilabel<num_labels; ++ilabel){
         int label = labels[ilabel];
 
@@ -356,12 +358,12 @@ int simp_contains(Simplex *simp, int *vecs, int dim, int *labels, int num_labels
 
         // label *is* in conical hull :(
         if (bad) {
-            return 1;
+            return label;
         }
     }
 
     // no label was in conical hull :)
-    return 0;
+    return -1;
 }
 
 // RANDFAN BEGINS
@@ -448,7 +450,7 @@ int randfan(
 
     // DEBUG PRINT
     #ifdef DEBUG
-        printf("Looking for initial simplex...");
+        fprintf(stderr,"Constructing initial simplex...");
     #endif
 
     while (1) {
@@ -461,10 +463,10 @@ int randfan(
 
         // DEBUG PRINT
         #ifdef DEBUG
-            printf("[");
+            fprintf(stderr,"[");
             for (int i=0; i<dim; ++i)
-                printf("%d,",simp_labels[i]);
-            printf("], ");
+                fprintf(stderr,"%d,",simp_labels[i]);
+            fprintf(stderr,"], ");
         #endif
 
         // get the V and H-representations
@@ -490,7 +492,8 @@ int randfan(
 
         // check if any other vector is included in this cone
         // --------------------------------------------------
-        if (simp_contains(simp, vecs, dim, labels, num_vecs)) {
+        int cont_label = simp_contains(simp, vecs, dim, labels, num_vecs);
+        if (cont_label != -1) {
             // increment the indices corresponding to the simplex
             // iterate over _inds right-to-left, trying to increment each val
             int i = dim - 1;
@@ -532,6 +535,10 @@ int randfan(
     // update simp count
     (*num_simps)++;
 
+    #ifdef DEBUG
+        fprintf(stderr,"\nDone!\n");
+    #endif
+
     // build other simplices
     // ---------------------
     visible_isimp  = malloc(max_num_simps * dim * sizeof(int));
@@ -539,18 +546,34 @@ int randfan(
     if (visible_isimp == NULL)  { return_code = -1; goto end; }
     if (visible_ifacet == NULL) { return_code = -1; goto end; }
 
+    int last_num_labels = num_labels+1;
     while (num_labels > 0) {
+        // ensure we're making progress
+        if (last_num_labels <= num_labels) {
+            printf("Didn't make progress in last iteration... %d %d\n",last_num_labels,num_labels);
+            return_code = -3;
+            goto end;
+        }
+        last_num_labels = num_labels;
+
         // re-shuffle the (now trimmed) labels
         fisher_yates(labels, num_labels, s);
 
-        printf("--------------------\n");
+        #ifdef DEBUG
+        fprintf(stderr, "\n%d | %d\n", num_labels, num_simps);
+        fprintf(stderr, "--------------------\n");
+        #endif
 
         // try pushing each label until one works (doesn't cover another vector)
         for (int ilabel=0; ilabel<num_labels; ++ilabel) {
             visible_numfacets = 0;
             int label = labels[ilabel];
 
-            printf("%d %d %d...\n", *num_simps, num_labels, label);
+            /*
+            #ifdef DEBUG
+            fprintf(stderr,"trying to add label=%d (#simps=%d; #outstanding labels=%d)...\n", label, *num_simps, num_labels);
+            #endif
+            */
 
             // get geometric vector associated to the label
             int v[dim];
@@ -627,7 +650,16 @@ int randfan(
 
                 // check if there is a bad containment
                 // -----------------------------------
-                if (simp_contains(simp, vecs, dim, labels, num_labels)) {
+                int cont_label = simp_contains(simp, vecs, dim, labels, num_labels);
+                if (cont_label != -1) {
+                    #ifdef DEBUG
+                    fprintf(stderr,"Simplex [");
+                    for (int i=0; i<dim; ++i) {
+                        fprintf(stderr,"%d,",simp->labels[i]);
+                    }
+                    fprintf(stderr,"] contained vector %d... :(\n", cont_label);
+                    #endif
+
                     covered_vec = 1;
                     break;
                 }
@@ -708,6 +740,12 @@ int randfan(
                 }
             }
             break;
+        }
+    }
+
+    for (int i=0; i<*num_simps; ++i) {
+        for (int j=0; j<dim; ++j) {
+            simps[dim* i+j] = _simps[i].labels[j];
         }
     }
 
