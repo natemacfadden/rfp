@@ -1,21 +1,30 @@
-#include <assert.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 
 #include <inttypes.h>
 
-// prints the n-dim unit cube.
+/* prints the vertices of the n-dim unit cube [0,1]^n
+   accepts a single (required) argument - the dimension n */
 
 int main(int argc, char **argv) {
-    // accept a single argument, the dimension
-    assert(argc == 2);
-    int n = atoi(argv[1]);
-    assert((1 <= n) && (n <= 10));
+    if (argc != 2) {
+        fprintf(stderr, "Expects single argument\n");
+        exit(1);
+    }
+
+    // parse the dimension
+    int n = (int)strtol(argv[1], NULL, 10);
+    if (n < 1) {
+        fprintf(stderr, "Dimension `n` must be >=1\n");
+        exit(1);
+    } else if (n > 64) {
+        fprintf(stderr, "Dimension `n` too above 64bit limit\n");
+        exit(1);
+    }
 
     // vertices corresponds to bits
     uint64_t upper = (n == 64) ? UINT64_MAX : ((uint64_t)1 << n) - 1;
-
     for (uint64_t i = 0; i<=upper; ++i) {
         printf("[");
         for (int j=n-1; j>=0; --j)
