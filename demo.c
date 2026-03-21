@@ -120,7 +120,7 @@ int main(int argc, char **argv) {
             max_num_simps, &rng_seed,
             simps, &num_simps);
 
-        if (retval != 0) { continue; }
+        if (retval != 0) { printf("return code %d...\n", retval); continue; }
 
         for (int i=0; i<num_simps; ++i) {
             printf("[");
