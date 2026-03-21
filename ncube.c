@@ -1,4 +1,3 @@
-#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -16,10 +15,13 @@ int main(int argc, char **argv) {
     // parse the dimension
     int n = (int)strtol(argv[1], NULL, 10);
     if (n < 1) {
-        fprintf(stderr, "Dimension `n` must be >=1\n");
+        fprintf(stderr, "Dimension n must be >=1\n");
         exit(1);
     } else if (n > 64) {
-        fprintf(stderr, "Dimension `n` too above 64bit limit\n");
+        fprintf(stderr, "Dimension n must be <=64\n");
+        exit(1);
+    } else if (n > 20) {
+        fprintf(stderr, "You are requesting 2^%d vertices... reconsider\n", n);
         exit(1);
     }
 
