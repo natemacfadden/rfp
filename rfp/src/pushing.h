@@ -33,9 +33,12 @@ These configurations are set by user-specified arguments in PushingOpts.
 **Returns:**
 A status code according to following list:
     0:  success
-    -1: memory allocation problem
-    -2: 0 vector input
-    -3: couldn't find initial simplex
+    -1: misconfigured options. If fine=1, need random=1.
+    -2: memory allocation problem
+    -3: 0 vector input
+    -4: couldn't find initial simplex
+    -5: deadlock state - couldn't add a new simplex
+    -6: constructed too many simplices
     -100: error in splitting a cone - see code
 */
 typedef struct {
@@ -386,14 +389,25 @@ static int simp_contains(
     int *vecs,
     int dim,
     int *labels,
-    int num_labels) {
-    // check if the simplex `simp` contains any of the vectors in `labels`
-    // returns a label contained. If no label is contained, returns -1
+    int num_labels,
+    int stop_at_first_containment,
+    int *contained_labels) {
+    /*
+    Computes which of the dim-dimensional vectors (as specified by the labels)
+    is contained in the input simplex. Ignores the labels explicitly included
+    in the simplex.
+
+    Optionally, allow stopping at the first containment.
+
+    Returns the number of containments found so far. If this is 0, then no other
+    vectors are contained in simp.
+    */
+    int num_contained = 0;
 
     for (int ilabel=0; ilabel<num_labels; ++ilabel){
         int label = labels[ilabel];
 
-        // nice check: skip if label is explicitly in simp
+        // skip if label is explicitly in simp
         int skip = 0;
         for (int isimp=0; isimp<dim; ++isimp) {
             if (label == simp->labels[isimp]) {skip = 1; break;}
@@ -414,12 +428,13 @@ static int simp_contains(
 
         // label *is* in conical hull :(
         if (bad) {
-            return label;
+            contained_labels[num_contained++] = label;
+            if (stop_at_first_containment)
+                return num_contained;
         }
     }
 
-    // no label was in conical hull :)
-    return -1;
+    return num_contained;
 }
 
 // PUSHING BEGINS
@@ -458,11 +473,19 @@ int pushing(
     **Returns:**
     A status code according to following list:
         0:  success
-        -1: memory allocation problem
-        -2: 0 vector input
-        -3: couldn't find initial simplex
+        -1: misconfigured options. If fine=1, need random=1.
+        -2: memory allocation problem
+        -3: 0 vector input
+        -4: couldn't find initial simplex
+        -5: deadlock state - couldn't add a new simplex
+        -6: constructed too many simplices
         -100: error in splitting a cone - see code
     */
+    // input checking
+    if (opts->fine && (opts->random == 0)) {
+        return -1;
+    }
+
     // set up some variables
     // ---------------------
     // misc
@@ -480,6 +503,9 @@ int pushing(
     int seed_simp_V[dim*dim];
     int seed_simp_H[dim*dim];
 
+    int contained_labels[num_labels];
+    int num_contained;
+
     // fan variables
     Simplex *_simps     = NULL;
     int visible_numfacets;
@@ -490,7 +516,7 @@ int pushing(
     // initialize the fan variables
     *num_simps      = 0;
     _simps = malloc(max_num_simps * sizeof(Simplex)); // internal use
-    if (_simps == NULL) { return_code = -1; goto end; }
+    if (_simps == NULL) { return_code = -2; goto end; }
 
     // input checks
     // ------------
@@ -519,7 +545,7 @@ int pushing(
 
         if (bad) {
             fprintf(stderr, "Rejected since the 0-vector was input...\n");
-            return_code = -2;
+            return_code = -3;
             goto end;
         }
     }
@@ -581,7 +607,7 @@ int pushing(
 
             // exhausted all combinations... error
             // (shouldn't ever hit though)
-            if (i < 0) { return_code=-3; goto end; }
+            if (i < 0) { return_code = -4; goto end; }
 
             // update the index i
             _inds[i]++;
@@ -610,10 +636,14 @@ int pushing(
 
         // check if any other vector is included in this cone
         // --------------------------------------------------
-        int cont_label = simp_contains(simp, vecs, dim, labels, num_vecs);
-        int cont_ind;
-        if (cont_label != -1) {
+        num_contained = simp_contains(
+            simp, vecs, dim, labels, num_vecs,
+            opts->fine, contained_labels);
+
+        if (num_contained != 0) {
             // darn... another vector is in cone... subdivide until we're good
+            int cont_label = contained_labels[0];
+            int cont_ind;
 
             // get contained vector index
             for (int i=0; i<num_vecs; ++i) {
@@ -677,8 +707,8 @@ int pushing(
     // ---------------------
     visible_isimp  = malloc(max_num_simps * dim * sizeof(int));
     visible_ifacet = malloc(max_num_simps * dim * sizeof(int));
-    if (visible_isimp == NULL)  { return_code = -1; goto end; }
-    if (visible_ifacet == NULL) { return_code = -1; goto end; }
+    if (visible_isimp == NULL)  { return_code = -2; goto end; }
+    if (visible_ifacet == NULL) { return_code = -2; goto end; }
 
     int last_num_labels = num_labels+1;
     #if defined(DEBUG) || defined(VERBOSE)
@@ -693,7 +723,7 @@ int pushing(
             printf("Didn't make progress in last iteration... %d %d\n",last_num_labels,num_labels);
             #endif
 
-            return_code = -3;
+            return_code = -5;
             goto end;
         }
         last_num_labels = num_labels;
@@ -736,7 +766,7 @@ int pushing(
             }
 
             if (*num_simps + visible_numfacets > max_num_simps) {
-                return_code = -4;
+                return_code = -6;
                 goto end;
             }
 
@@ -790,22 +820,24 @@ int pushing(
 
                 // check if there is a bad containment
                 // -----------------------------------
-                int cont_label = simp_contains(simp, vecs, dim, labels, num_labels);
-                if (cont_label != -1) {
+                num_contained = simp_contains(
+                    simp, vecs, dim, labels, num_labels,
+                    opts->fine, contained_labels);
+
+                if (num_contained != 0) {
                     #ifdef DEBUG
                     fprintf(stderr,"Simplex [");
                     for (int i=0; i<dim; ++i) {
                         fprintf(stderr,"%d,",simp->labels[i]);
                     }
-                    fprintf(stderr,"] contained vector %d... :(\n", cont_label);
+                    fprintf(stderr,"] contained vec %d\n", contained_labels[0]);
                     #endif
 
-                    covered_vec = 1;
                     break;
                 }
             }
             // try next label if one of the simplices covered another vec
-            if (covered_vec) {
+            if (num_contained) {
                 continue;
             }
 
