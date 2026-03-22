@@ -1,16 +1,19 @@
 #pragma once
 
+#define DET1
 static int det1(int *M) {
     return
         + M[0*1+0];
 }
 
+#define DET2
 static int det2(int *M) {
     return
         + M[0*2+0]*M[1*2+1]
         - M[0*2+1]*M[1*2+0];
 }
 
+#define DET3
 static int det3(int *M) {
     return
         + M[0*3+0]*M[1*3+1]*M[2*3+2]
@@ -21,6 +24,7 @@ static int det3(int *M) {
         - M[0*3+2]*M[1*3+1]*M[2*3+0];
 }
 
+#define DET4
 static int det4(int *M) {
     return
         + M[0*4+0]*M[1*4+1]*M[2*4+2]*M[3*4+3]
@@ -49,6 +53,7 @@ static int det4(int *M) {
         + M[0*4+3]*M[1*4+2]*M[2*4+1]*M[3*4+0];
 }
 
+#define DET5
 static int det5(int *M) {
     return
         + M[0*5+0]*M[1*5+1]*M[2*5+2]*M[3*5+3]*M[4*5+4]
@@ -173,6 +178,7 @@ static int det5(int *M) {
         + M[0*5+4]*M[1*5+3]*M[2*5+2]*M[3*5+1]*M[4*5+0];
 }
 
+#define DET6
 static int det6(int *M) {
     return
         + M[0*6+0]*M[1*6+1]*M[2*6+2]*M[3*6+3]*M[4*6+4]*M[5*6+5]

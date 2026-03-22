@@ -60,7 +60,12 @@ int rfp(
 
 #include <stdio.h>
 #include <stdlib.h>
-#include "det.h" // optional hardcoded determinants
+
+// optional hardcoded determinants
+#if defined(__has_include) && __has_include("det.h")
+#include "det.h"
+#endif
+
 
 // EXTERNAL METHODS (copied in full; modifications marked)
 // ----------------
@@ -251,16 +256,37 @@ static void reduce_by_gcd(int *v, int dim) {
 static int det(int *M, int dim) {
     // computes the determinant of M, a dim-by-dim matrix
 
-    // base case                                                                                                                                                                  
-    switch (dim) {                                                                                                                                                                                     
+    // base case
+    switch (dim) { 
+        #ifdef DET1
         case 1: return det1(M);
+        #endif
+
+        #ifdef DET2
         case 2: return det2(M);
+        #endif
+
+        #ifdef DET3
         case 3: return det3(M);
+        #endif
+
+        #ifdef DET4
         case 4: return det4(M);
+        #endif
+
+        #ifdef DET5
         case 5: return det5(M);
+        #endif
+
+        #ifdef DET6
         case 6: return det6(M);
+        #endif
+
         default: ;
     }
+    // in case there is no hardcoded det.h file, here is a base case
+    if (dim == 1)
+        return M[0];
 
     // recurse
     int out = 0;

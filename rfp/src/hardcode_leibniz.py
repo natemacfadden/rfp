@@ -1,15 +1,15 @@
 # Written by Claude Code (claude-sonnet-4-6)
+# (w/ a little help from Nate)
 
 """Generate hardcoded C det functions for dimensions 1..N via Leibniz formula.
 
 Usage: python3 hardcode_leibniz.py [--max <int>] [--out <file>]
   --max <int>   Maximum dimension (default: 6)
-  --out <file>  Output file (default: stdout)
+  --out <file>  Output file (default: det.h)
 """
 
 import sys
 from itertools import permutations
-
 
 def gen_terms(n):
     """
@@ -17,7 +17,7 @@ def gen_terms(n):
     """
     terms = []
     for p in permutations(range(n)):
-        # compute sign of permutation
+        # sign = (-1)^(# even-length cycles in p)
         sign = 1
         visited = [False] * n
         for i in range(n):
@@ -35,7 +35,7 @@ def gen_terms(n):
 
 
 def term_to_c(sign, cols, n):
-    """Convert a single term to a C expression like '+M[0*n+2]*M[1*n+0]*...'"""
+    # emit e.g. "+ M[0*3+1]*M[1*3+0]*M[2*3+2]"
     factors = [f"M[{row}*{n}+{col}]" for row, col in enumerate(cols)]
     product = "*".join(factors)
     if sign == 1:
@@ -45,6 +45,7 @@ def term_to_c(sign, cols, n):
 
 
 def gen_function(n):
+    # build the C function as a list of lines
     terms = gen_terms(n)
     lines = []
     lines.append(f"#define DET{n}")
@@ -57,11 +58,9 @@ def gen_function(n):
 
 
 def main():
-    if len(sys.argv) == 1:
-        print(__doc__.strip())
-        sys.exit(0)
     max_dim = 6
-    out = None
+    out     = "det.h"
+
     args = sys.argv[1:]
     while args:
         if args[0] == '--max' and len(args) > 1:
@@ -77,10 +76,7 @@ def main():
         lines.append('')
     output = '\n'.join(lines)
 
-    if out:
-        with open(out, 'w') as f:
-            f.write(output)
-    else:
-        print(output)
+    with open(out, 'w') as f:
+        f.write(output) 
 
 main()
