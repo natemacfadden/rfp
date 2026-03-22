@@ -1,11 +1,11 @@
 # Written by Claude Code (claude-sonnet-4-6)
 
-"""Run rfp seed-by-seed on a data file and show a live-updating triplot.
+"""Run pushing seed-by-seed on a data file and show a live-updating triplot.
 
-Usage: python3 live_triplot.py [--data <file>] [--n <int>] [--rfp <path>]
+Usage: python3 live_triplot.py [--data <file>] [--n <int>] [--fct <path>]
   --data <file>   Input data file (default: data/491_big2face.dat)
   --n    <int>    Number of seeds to run (default: 100)
-  --rfp  <path>   Path to rfp binary (default: ./rfp)
+  --fct  <path>   Path to pushing binary (default: ./pushing)
 """
 
 import sys
@@ -17,15 +17,15 @@ import matplotlib.pyplot as plt
 def parse_args():
     data = None
     n    = 100
-    rfp  = "./rfp"
+    fct  = "./pushing"
     args = sys.argv[1:]
     while args:
         if args[0] == "--data" and len(args) > 1:
             data = args[1]; args = args[2:]
         elif args[0] == "--n" and len(args) > 1:
             n = int(args[1]); args = args[2:]
-        elif args[0] == "--rfp" and len(args) > 1:
-            rfp = args[1]; args = args[2:]
+        elif args[0] == "--fct" and len(args) > 1:
+            fct = args[1]; args = args[2:]
         else:
             sys.exit(f"Unknown argument: {args[0]}\n{__doc__.strip()}")
 
@@ -33,9 +33,9 @@ def parse_args():
         print("must pass path to data...")
         sys.exit(0)
 
-    return data, n, rfp
+    return data, n, fct
 
-data_file, n_seeds, rfp_bin = parse_args()
+data_file, n_seeds, fct_bin = parse_args()
 
 with open(data_file) as f:
     raw = f.read().strip()
@@ -52,7 +52,7 @@ fig, ax = plt.subplots()
 
 for seed in range(n_seeds):
     result = subprocess.run(
-        [rfp_bin, '--seed', str(seed), raw],
+        [fct_bin, '--seed', str(seed), raw],
         capture_output=True, text=True
     )
     line = result.stdout.strip()

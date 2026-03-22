@@ -30,7 +30,9 @@ int main(int argc, char **argv) {
 
     // configuration for pushing call
     PushingOpts opts = {0};
-    opts.seed = 1102;
+    opts.seed   = 1102;
+    opts.random = 1;
+    opts.fine   = 0;
 
     // parse inputs
     // ------------

@@ -511,7 +511,6 @@ int pushing(
     int visible_numfacets;
     int *visible_isimp  = NULL;
     int *visible_ifacet = NULL;
-    int covered_vec; 
 
     // initialize the fan variables
     *num_simps      = 0;
@@ -567,12 +566,15 @@ int pushing(
 
     // DEBUG PRINT
     #if defined(DEBUG) || defined(VERBOSE)
-        fprintf(stderr,"Constructing initial simplex...");
+        fprintf(stderr,"Constructing initial simplex...\n");
     #endif
 
     while (1) {
         // for retrying next iteration w/ goto
         begin_seed:;
+        #ifdef DEBUG
+        fprintf(stderr, "new attempt for seed simplex... ");
+        #endif
 
         // get simplex labels, sort them
         for (int i = 0; i < dim; i++) simp_labels[i] = labels[_inds[i]];
@@ -583,7 +585,7 @@ int pushing(
             fprintf(stderr,"[");
             for (int i=0; i<dim; ++i)
                 fprintf(stderr,"%d,",simp_labels[i]);
-            fprintf(stderr,"], ");
+            fprintf(stderr,"]\n");
         #endif
 
         // get the V-representation
@@ -640,7 +642,9 @@ int pushing(
             simp, vecs, dim, labels, num_vecs,
             opts->fine, contained_labels);
 
-        if (num_contained != 0) {
+        // if we care about fineness, must repeat until we get num_contained=0
+        if (opts->fine && (num_contained != 0)) {
+            printf("wtf1???\n");
             // darn... another vector is in cone... subdivide until we're good
             int cont_label = contained_labels[0];
             int cont_ind;
@@ -683,11 +687,23 @@ int pushing(
     }
 
     // discard used labels
+    // -------------------
     for (int i=0; i<num_labels; ++i) {
-        // check if we need to throw away the ith label
         for (int j=0; j<dim; ++j) {
             if (labels[i] == _simps[0].labels[j]) {
                 // matches a label in simp... throw it away
+                labels[i] = labels[num_labels-1];
+                num_labels--;
+                i--; // decrement i in case swapped-in matches another label
+                break;
+            }
+        }
+    }
+
+    for (int i=0; i<num_labels; ++i) {
+        for (int j=0; j<num_contained; ++j) {
+            if (labels[i] == contained_labels[j]) {
+                // matches a contained label... throw it away
                 labels[i] = labels[num_labels-1];
                 num_labels--;
                 i--; // decrement i in case swapped-in matches another label
@@ -700,7 +716,7 @@ int pushing(
     (*num_simps)++;
 
     #if defined(DEBUG) || defined(VERBOSE)
-        fprintf(stderr,"\nDone!\n");
+        fprintf(stderr,"Done!\n");
     #endif
 
     // build other simplices
@@ -773,8 +789,6 @@ int pushing(
             // tentatively add simps associated to visible facets
             // --------------------------------------------------
             // (don't update num_simps yet in case any of these are bad)
-            covered_vec = 0;
-
             for (int k=0; k<visible_numfacets; ++k) {
                 Simplex *facet_haver = &_simps[visible_isimp[k]];
 
@@ -824,7 +838,7 @@ int pushing(
                     simp, vecs, dim, labels, num_labels,
                     opts->fine, contained_labels);
 
-                if (num_contained != 0) {
+                if (opts->fine && num_contained != 0) {
                     #ifdef DEBUG
                     fprintf(stderr,"Simplex [");
                     for (int i=0; i<dim; ++i) {
@@ -837,7 +851,8 @@ int pushing(
                 }
             }
             // try next label if one of the simplices covered another vec
-            if (num_contained) {
+            if (opts->fine && num_contained) {
+                printf("wtf2???\n");
                 continue;
             }
 
@@ -924,6 +939,18 @@ int pushing(
                     labels[i] = labels[num_labels-1];
                     num_labels--;
                     break;
+                }
+            }
+            for (int i=0; i<num_labels; ++i) {
+                // check if we need to throw away the ith label
+                for (int j=0; j<num_contained; ++j) {
+                    if (labels[i] == contained_labels[j]) {
+                        // matches a contained label... throw it away
+                        labels[i] = labels[num_labels-1];
+                        num_labels--;
+                        i--; // decrement i in case swapped-in matches another label
+                        break;
+                    }
                 }
             }
             break;
