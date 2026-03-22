@@ -1,8 +1,8 @@
 # Written by Claude Code (claude-sonnet-4-6)
 
-"""Generate hardcoded C det functions for dimensions 1..N via cofactor expansion.
+"""Generate hardcoded C det functions for dimensions 1..N via Leibniz formula.
 
-Usage: python3 hardcoded_dets_in_c.py [--max <int>] [--out <file>]
+Usage: python3 hardcode_leibniz.py [--max <int>] [--out <file>]
   --max <int>   Maximum dimension (default: 6)
   --out <file>  Output file (default: stdout)
 """
