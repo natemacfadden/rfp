@@ -17,6 +17,7 @@ if TYPE_CHECKING:
 
 _RADIUS_PAIR_START = 6
 _EDGE_PAIR_BASE    = 40   # pairs 40-43: front-flip, front-noflip, other-flip, other-noflip
+_IREG_BG_PAIR      = 50   # pair for irregular-fan background tint
 
 # (r, g, b) in 0–1000 range for curses
 _VIRIDIS_KEYS: list[tuple[int, int, int]] = [
@@ -368,6 +369,12 @@ class Renderer:
                 curses.init_pair(_EDGE_PAIR_BASE + 1, curses.COLOR_RED,   -1)
                 curses.init_pair(_EDGE_PAIR_BASE + 2, curses.COLOR_GREEN, -1)
                 curses.init_pair(_EDGE_PAIR_BASE + 3, curses.COLOR_RED,   -1)
+            # Irregular-fan background: dark red bg, default fg.
+            if curses.COLORS > _cb + 4 and curses.COLOR_PAIRS > _IREG_BG_PAIR:
+                curses.init_color(_cb + 4, 280, 0, 0)
+                curses.init_pair(_IREG_BG_PAIR, -1, _cb + 4)
+            else:
+                curses.init_pair(_IREG_BG_PAIR, -1, curses.COLOR_RED)
         else:
             for i, fg in enumerate([curses.COLOR_BLUE, curses.COLOR_CYAN,
                                      curses.COLOR_GREEN, curses.COLOR_YELLOW,
@@ -378,6 +385,7 @@ class Renderer:
             curses.init_pair(_EDGE_PAIR_BASE + 1, curses.COLOR_RED,   -1)
             curses.init_pair(_EDGE_PAIR_BASE + 2, curses.COLOR_GREEN, -1)
             curses.init_pair(_EDGE_PAIR_BASE + 3, curses.COLOR_RED,   -1)
+            curses.init_pair(_IREG_BG_PAIR, -1, curses.COLOR_RED)
 
     def draw(
         self,
@@ -387,9 +395,10 @@ class Renderer:
         pointed_facet: tuple[int, int] | None = None,
         locked: bool = False,
         allow_deletion: bool = True,
-        color_mode: int = 2,
-        view_scale: float = 1.0,
-        flip_status: dict | None = None,
+        color_mode:   int   = 2,
+        view_scale:   float = 1.0,
+        flip_status:  dict  | None = None,
+        is_irregular: bool  = False,
     ) -> None:
         """
         **Description:**
@@ -411,6 +420,7 @@ class Renderer:
         Nothing.
         """
         scr = self._stdscr
+        scr.bkgd(' ', curses.color_pair(_IREG_BG_PAIR) if is_irregular else 0)
         scr.erase()
         rows, cols = scr.getmaxyx()
         cy, cx = rows // 2, cols // 2
@@ -713,7 +723,7 @@ class Renderer:
 
 
 def run_display_demo(
-    fan: Fan, vc: object, agent: object = None,
+    fan: Fan, vc: object, agent: object = None, allow_deletion: bool = False,
 ) -> None:
     """
     **Description:**
@@ -739,9 +749,10 @@ def run_display_demo(
     # Normalise display so vectors of max norm project to a fixed visual radius.
     # TARGET = 1.9 was chosen so the cube (max_norm=√3) expands slightly and
     # the truncated octahedron (max_norm=√5) shrinks relative to the cube.
-    _TARGET_NORM = 1.9
-    _max_norm    = float(np.linalg.norm(fan.vectors(), axis=1).max()) or 1.0
-    _view_scale  = _TARGET_NORM / _max_norm
+    _TARGET_NORM    = 1.9
+    _max_norm       = float(np.linalg.norm(fan.vectors(), axis=1).max()) or 1.0
+    _view_scale     = _TARGET_NORM / _max_norm
+    _allow_deletion = allow_deletion   # capture before _main shadows the name
 
     def _main(stdscr: _CursesWindow) -> None:
         curses.curs_set(0)
@@ -753,12 +764,13 @@ def run_display_demo(
             stdscr.timeout(50)
             player = agent.player
         renderer       = Renderer(fan, stdscr)
-        allow_deletion = True
+        allow_deletion = _allow_deletion
         locked         = False
         color_mode     = 0
         _speed         = LAT_ACCEL / TURN  # start at the critical speed
 
-        nonlocal_fan = [fan]
+        nonlocal_fan  = [fan]
+        _irregularity = [not fan.is_regular()]   # updated on every flip
 
         def _try_move(step: float) -> None:
             f = nonlocal_fan[0]
@@ -778,6 +790,7 @@ def run_display_demo(
             nonlocal_fan[0]    = new_fan
             renderer._fan      = new_fan
             renderer._edge_map = _cone_edge_map(new_fan)
+            _irregularity[0]   = not new_fan.is_regular()
 
         def _agent_step() -> None:
             f        = nonlocal_fan[0]
@@ -801,6 +814,7 @@ def run_display_demo(
             nonlocal_fan[0]    = new_fan
             renderer._fan      = new_fan
             renderer._edge_map = _cone_edge_map(new_fan)
+            _irregularity[0]   = not new_fan.is_regular()
 
         _agent_rate = 1.0   # steps per frame (can be fractional)
         _agent_acc  = 0.0   # fractional accumulator
@@ -830,7 +844,7 @@ def run_display_demo(
                 _flip_status[_ek] = _ok
             renderer.draw(player.position, player.heading, cone,
                           facet, locked, allow_deletion, color_mode,
-                          _view_scale, _flip_status)
+                          _view_scale, _flip_status, _irregularity[0])
             stdscr.refresh()
             key = stdscr.getch()
             if   key == ord("q"):  break
