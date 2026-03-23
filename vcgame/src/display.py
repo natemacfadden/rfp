@@ -5,7 +5,6 @@ Curses-based ASCII renderer for the fan and player position on S².
 from __future__ import annotations
 
 import curses
-from math import cos, sin, pi
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -287,9 +286,7 @@ class Renderer:
         current_cone: tuple[int, ...],
         pointed_facet: tuple[int, int] | None = None,
         locked: bool = False,
-        allow_deletion: bool = False,
-        tilt: float = 0.0,
-        azimuth: float = 0.0,
+        allow_deletion: bool = True,
     ) -> None:
         """
         **Description:**
@@ -305,8 +302,6 @@ class Renderer:
           aiming at, or `None`.
         - `locked`: Whether movement is locked.
         - `allow_deletion`: Whether deletion mode is active.
-        - `tilt`: Camera tilt angle (0 = top-down, π/2 = horizon).
-        - `azimuth`: Camera rotation around player direction.
 
         **Returns:**
         Nothing.
@@ -317,23 +312,11 @@ class Renderer:
         cy, cx = rows // 2, cols // 2
         scale  = float(min(rows, cols // 2) // 2 - 2) * 0.75
 
-        p  = player_pos
-        e1 = player_heading
-        e2 = np.cross(p, e1)
-
-        e1_az = cos(azimuth) * e1 + sin(azimuth) * np.cross(p, e1)
-        n_az  = np.linalg.norm(e1_az)
-        if n_az > 1e-12:
-            e1_az = e1_az / n_az
-
-        view_dir_raw = cos(tilt) * p - sin(tilt) * e1_az
-        vdn = np.linalg.norm(view_dir_raw)
-        view_dir = view_dir_raw / vdn if vdn > 1e-12 else p
-
-        e1_new_raw = e1_az - np.dot(e1_az, view_dir) * view_dir
-        e1n = np.linalg.norm(e1_new_raw)
-        e1_new = e1_new_raw / e1n if e1n > 1e-12 else e1_az
-        e2_new = np.cross(view_dir, e1_new)
+        p        = player_pos
+        e1       = player_heading
+        view_dir = p
+        e1_new   = e1
+        e2_new   = np.cross(p, e1)
 
         fan    = self._fan
         labels = list(current_cone)
@@ -443,13 +426,12 @@ class Renderer:
             f" pos=({p[0]:+.2f},{p[1]:+.2f},{p[2]:+.2f})"
             f"  cone={current_cone}"
             f"  facet={facet_str}"
-            f"  tilt={tilt:.2f} az={azimuth:.2f}"
             f"  "
         )
-        lock_str = "[F]lock:ON" if locked else "[F]lock:off"
-        lock_attr = (curses.color_pair(2) | curses.A_BOLD
+        stay_str  = "[S]tay:ON" if locked else "[S]tay:off"
+        stay_attr = (curses.color_pair(2) | curses.A_BOLD
                      if locked else curses.color_pair(4))
-        del_str   = "  [G]del:ON" if allow_deletion else "  [G]del:off"
+        del_str   = "  [D]el:ON" if allow_deletion else "  [D]el:off"
         del_attr  = (curses.color_pair(2) | curses.A_BOLD
                      if allow_deletion else curses.color_pair(4))
         tail = "  [q]uit"
@@ -459,8 +441,9 @@ class Renderer:
                        hud_base[: cols - 1], curses.color_pair(4))
             col += len(hud_base)
             if col < cols - 1:
-                scr.addstr(rows - 1, col, lock_str[: cols - 1 - col], lock_attr)
-                col += len(lock_str)
+                scr.addstr(rows - 1, col,
+                           stay_str[: cols - 1 - col], stay_attr)
+                col += len(stay_str)
             if col < cols - 1:
                 scr.addstr(rows - 1, col, del_str[: cols - 1 - col], del_attr)
                 col += len(del_str)
@@ -489,11 +472,8 @@ def run_display_demo(
     **Returns:**
     Nothing.
     """
-    STEP       = 0.08
-    TURN       = 0.12
-    TILT_STEP  = 0.08
-    AZ_STEP    = 0.10
-    TILT_MAX   = pi / 2 - 0.05
+    STEP = 0.08
+    TURN = 0.12
 
     def _main(stdscr: _CursesWindow) -> None:
         curses.curs_set(0)
@@ -505,10 +485,8 @@ def run_display_demo(
             stdscr.timeout(50)
             player = agent.player
         renderer       = Renderer(fan, stdscr)
-        allow_deletion = False
+        allow_deletion = True
         locked         = False
-        tilt           = 0.0
-        azimuth        = 0.0
 
         nonlocal_fan = [fan]
 
@@ -561,17 +539,12 @@ def run_display_demo(
             cone    = player.current_cone(f)
             facet   = player.pointed_facet(f)
             renderer.draw(player.position, player.heading, cone,
-                          facet, locked, allow_deletion,
-                          tilt=tilt, azimuth=azimuth)
+                          facet, locked, allow_deletion)
             stdscr.refresh()
             key = stdscr.getch()
             if   key == ord("q"):  break
-            elif key == ord("f"):  locked = not locked
-            elif key == ord("g"):  allow_deletion = not allow_deletion
-            elif key == ord("w"):  tilt = max(0.0, tilt - TILT_STEP)
-            elif key == ord("s"):  tilt = min(TILT_MAX, tilt + TILT_STEP)
-            elif key == ord("a"):  azimuth -= AZ_STEP
-            elif key == ord("d"):  azimuth += AZ_STEP
+            elif key == ord("s"):  locked = not locked
+            elif key == ord("d"):  allow_deletion = not allow_deletion
             elif agent is None:
                 if   key == curses.KEY_UP:    _try_move(STEP)
                 elif key == curses.KEY_DOWN:  _try_move(-STEP)
