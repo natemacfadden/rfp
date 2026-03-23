@@ -14,6 +14,8 @@ void usage(const char *prog) {
         "Usage: %s [OPTIONS] [POINTS]\n"
         "\n"
         "Options:\n"
+        "  -r, --random             Randomize pushing order\n"
+        "  -f, --fine               Require fine triangulation (use all vectors)\n"
         "  -n, --num <int>          Number of triangulations (default: 1)\n"
         "  -s, --seed <uint64>      RNG seed (default: 1102)\n"
         "  --maxnumsimps <int>      Max simplices allocated (default: 100000)\n"
