@@ -1,6 +1,6 @@
 # vcgame
 
-A game built around *vector configurations* and their *triangulations triangulations*.
+A game built around *vector configurations* and their *triangulations*.
 
 The player navigates on a simplicial fan — a triangulation of a 3D lattice vector configuration — by moving along geodesics on the 2-sphere. Crossing a wall between cones performs a bistellar flip, changing the triangulation. The fan can be locked to allow exploration without modification.
 
