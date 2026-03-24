@@ -14,6 +14,16 @@ import numpy as np
 if TYPE_CHECKING:
     from regfans import Fan, VectorConfiguration
 
+_NORM_EPS = 1e-15
+
+
+def _cartesian_to_angles(d: np.ndarray) -> tuple[float, float]:
+    """Return (theta, phi) spherical angles for a unit vector d."""
+    return (
+        float(np.arccos(np.clip(d[2], -1.0, 1.0))),
+        float(np.arctan2(d[1], d[0])),
+    )
+
 
 class Player:
     """
@@ -81,18 +91,17 @@ class Player:
             raise ValueError(f"radius must be positive, got {radius}")
 
         p_norm = np.linalg.norm(position)
-        if p_norm < 1e-15:
+        if p_norm < _NORM_EPS:
             raise ValueError("position must be non-zero")
 
         p_unit = position / p_norm
-        theta = float(np.arccos(np.clip(p_unit[2], -1.0, 1.0)))
-        phi   = float(np.arctan2(p_unit[1], p_unit[0]))
+        theta, phi = _cartesian_to_angles(p_unit)
         self._position = np.array([float(radius), theta, phi])
         self._height   = float(height)
 
         h = heading - np.dot(heading, p_unit) * p_unit
         h_norm = np.linalg.norm(h)
-        if h_norm < 1e-15:
+        if h_norm < _NORM_EPS:
             raise ValueError(
                 "heading has no component tangent to position "
                 "(parallel or zero)"
@@ -229,8 +238,7 @@ class Player:
         new_h /= np.linalg.norm(new_h)
 
         # Store updated angular part back into spherical coordinates
-        self._position[1] = float(np.arccos(np.clip(new_d[2], -1.0, 1.0)))
-        self._position[2] = float(np.arctan2(new_d[1], new_d[0]))
+        self._position[1], self._position[2] = _cartesian_to_angles(new_d)
         self._heading      = new_h
 
         if fan is None:

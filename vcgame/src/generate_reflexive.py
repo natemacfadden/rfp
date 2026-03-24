@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import re
 from typing import TYPE_CHECKING
+from urllib.error import URLError
 from urllib.request import urlopen
 
 from regfans import VectorConfiguration
@@ -53,8 +54,13 @@ def _fetch_vectors(polytope_id: int) -> list[list[int]]:
         )
 
     url = _BASE_URL.format(polytope_id)
-    with urlopen(url, timeout=15) as resp:
-        html = resp.read().decode("utf-8")
+    try:
+        with urlopen(url, timeout=15) as resp:
+            html = resp.read().decode("utf-8")
+    except URLError as exc:
+        raise ValueError(
+            f"Failed to fetch reflexive polytope {polytope_id}: {exc}"
+        ) from exc
 
     # Locate the value cell that follows a cell containing "Integer points".
     match = re.search(

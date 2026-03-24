@@ -29,6 +29,10 @@ _EDGE_PAIR_BASE    = 40   # pairs 40-43: front-flip, front-noflip, other-flip, o
 _IREG_BG_PAIR      = 50   # pair for irregular-fan background tint
 _FILL_PAIR         = 51   # dim fill for visible surface patches
 
+_SLERP_STEP   = 0.04   # arc-length step for spherical triangle sampling
+_SUN_DISTANCE = 20.0
+_SUN_REF      = np.array([1.0, 1.0, 1.0])
+
 # (r, g, b) in 0–1000 range for curses
 _VIRIDIS_KEYS: list[tuple[int, int, int]] = [
     (267,   4, 329),
@@ -51,6 +55,35 @@ def _viridis_rgb(t: float) -> tuple[int, int, int]:
     r0, g0, b0 = _VIRIDIS_KEYS[lo]
     r1, g1, b1 = _VIRIDIS_KEYS[hi]
     return int(r0 + f*(r1-r0)), int(g0 + f*(g1-g0)), int(b0 + f*(b1-b0))
+
+
+def _addstr(scr, r: int, c: int, text: str, attr: int = 0) -> None:
+    """Write text to the curses screen, silently ignoring out-of-bounds errors."""
+    try:
+        scr.addstr(r, c, text, attr)
+    except curses.error:
+        pass
+
+
+def _orient_normal(n: np.ndarray, ref: np.ndarray) -> np.ndarray:
+    """Return n flipped so it points toward ref (dot(n, ref) > 0)."""
+    return n if np.dot(n, ref) >= 0.0 else -n
+
+
+def _edge_attrs(
+    edge: tuple,
+    is_active: bool,
+    flip_status: dict | None,
+) -> tuple[str, int]:
+    """Return (character, curses attr) for rendering an edge."""
+    if is_active and flip_status is not None:
+        flippable = flip_status.get(edge, False)
+        return "+", curses.color_pair(
+            _EDGE_PAIR_BASE + (2 if flippable else 3)
+        )
+    if is_active:
+        return "+", curses.color_pair(2) | curses.A_BOLD
+    return ".", curses.color_pair(1)
 
 
 def _project(
@@ -147,10 +180,7 @@ def _draw_line(
 
     def put(r: int, c: int) -> None:
         if 0 <= r < rows - 1 and 0 <= c < cols - 1:
-            try:
-                scr.addstr(r, c, ch, attr)
-            except curses.error:
-                pass
+            _addstr(scr, r, c, ch, attr)
 
     dr, dc = abs(r1 - r0), abs(c1 - c0)
     sr = 1 if r1 > r0 else -1
@@ -238,8 +268,7 @@ def _fill_triangle(
         face_normal = (_fn / _fn_n) if _fn_n > 1e-12 else np.zeros(3)
         # Ensure normal points away from origin (consistent across view changes).
         _centroid = (vv[0] + vv[1] + vv[2]) / 3.0
-        if float(np.dot(face_normal, _centroid)) < 0.0:
-            face_normal = -face_normal
+        face_normal = _orient_normal(face_normal, _centroid)
 
     def _il(a: float, b: float, ra: int, rb: int, r: int) -> float:
         return a if ra == rb else a + (b - a) * (r - ra) / (rb - ra)
@@ -274,10 +303,7 @@ def _fill_triangle(
                 c_ch, c_attr = result
             else:
                 c_ch, c_attr = ch, attr
-            try:
-                scr.addstr(r, c, c_ch, c_attr)
-            except curses.error:
-                pass
+            _addstr(scr, r, c, c_ch, c_attr)
 
 
 _COLOR_LABELS  = ("sun", "radius", "wireframe")
@@ -295,9 +321,8 @@ _M3_THETA_MAX  = 55.0   # flashlight cone half-angle from heading, degrees
 # _SUN_BRIGHTNESS normalises intensity so the closest expected surface
 # (at ~1 unit from origin, ~19 units from the sun) maps to roughly 1.
 _SUN_POS: np.ndarray = np.array([1.0, 2.0, 3.0])
-_SUN_POS = _SUN_POS / float(np.linalg.norm(_SUN_POS)) * 20.0
-_SUN_BRIGHTNESS   = float(np.dot(_SUN_POS - np.array([1.0, 1.0, 1.0]),
-                                  _SUN_POS - np.array([1.0, 1.0, 1.0])))
+_SUN_POS = _SUN_POS / float(np.linalg.norm(_SUN_POS)) * _SUN_DISTANCE
+_SUN_BRIGHTNESS   = float(np.dot(_SUN_POS - _SUN_REF, _SUN_POS - _SUN_REF))
 _SUN_AMBIENT      = 0.12   # base illumination on all surfaces, including shadowed ones
 _SUN_MAX          = 0.72   # cap on sun brightness (prevents over-saturation at peak)
 _DIM_LEVEL        = 0.45   # default brightness when flashlight is off
@@ -472,10 +497,7 @@ def _fill_sph_triangle(
                 if depth_buf is not None:
                     depth_buf[r, c_abs] = z
                 c_ch, c_attr = result
-                try:
-                    scr.addstr(r, c_abs, c_ch, c_attr)
-                except curses.error:
-                    pass
+                _addstr(scr, r, c_abs, c_ch, c_attr)
         else:
             # Fast path: one addstr per contiguous run.
             gaps   = np.where(np.diff(idx) > 1)[0] + 1
@@ -484,10 +506,7 @@ def _fill_sph_triangle(
             for s, e in zip(starts, ends):
                 c0 = cmin + int(idx[s])
                 n  = int(idx[e]) - int(idx[s]) + 1
-                try:
-                    scr.addstr(r, c0, ch * n, attr)
-                except curses.error:
-                    pass
+                _addstr(scr, r, c0, ch * n, attr)
 
 
 class Renderer:
@@ -677,8 +696,7 @@ class Renderer:
             all_cones_list.append(ct)
             vs = [ray(l) for l in clabels]
             n  = np.cross(vs[1] - vs[0], vs[2] - vs[0])
-            if np.dot(n, vs[0]) < 0:
-                n = -n
+            n  = _orient_normal(n, vs[0])
             nn = np.linalg.norm(n)
             if nn > 1e-12:
                 n = n / nn
@@ -713,7 +731,7 @@ class Renderer:
             v = ray(b)
             cos_a   = float(np.clip(np.dot(u, v), -1.0, 1.0))
             theta   = float(np.arccos(cos_a))
-            n_steps = max(2, int(theta / 0.04))
+            n_steps = max(2, int(theta / _SLERP_STEP))
             sin_th  = float(np.sin(theta))
             prev: tuple[int, int] | None = None
             for i in range(n_steps + 1):
@@ -760,8 +778,7 @@ class Renderer:
             _curr_nn = float(np.linalg.norm(_curr_nf))
             if _curr_nn > 1e-12:
                 _curr_nf = _curr_nf / _curr_nn
-            if float(np.dot(_curr_nf, _curr_vv[0])) < 0:
-                _curr_nf = -_curr_nf
+            _curr_nf = _orient_normal(_curr_nf, _curr_vv[0])
             # Source: project p onto the current face plane, then step outward
             # along the face normal.  p (unit sphere) is inside the cube at
             # diagonal positions, so p + eps*nf would place the source inside
@@ -803,8 +820,7 @@ class Renderer:
                 _nn0 = float(np.linalg.norm(_nf0))
                 if _nn0 > 1e-12:
                     _nf0 = _nf0 / _nn0
-                if float(np.dot(_nf0, _vv0[0])) < 0:
-                    _nf0 = -_nf0
+                _nf0 = _orient_normal(_nf0, _vv0[0])
                 _m3_faces[_ct0] = (_vv0, _c0, _nf0)
 
             # Per-face flashlight brightness: occlusion + smooth cone falloff.
@@ -1013,18 +1029,7 @@ class Renderer:
                     if pointed_facet and edge == pointed_facet:
                         continue
                     is_active = edge in active_edge_set
-                    if is_active and flip_status is not None:
-                        flippable = flip_status.get(edge, False)
-                        ch_e   = "+"
-                        attr_e = curses.color_pair(
-                            _EDGE_PAIR_BASE + (2 if flippable else 3)
-                        )
-                    elif is_active:
-                        ch_e   = "+"
-                        attr_e = curses.color_pair(2) | curses.A_BOLD
-                    else:
-                        ch_e   = "."
-                        attr_e = curses.color_pair(1)
+                    ch_e, attr_e = _edge_attrs(edge, is_active, flip_status)
                     _draw_edge(a, b, ch_e, attr_e)
         else:
             for ct in sorted_front:
@@ -1068,18 +1073,7 @@ class Renderer:
                     if pointed_facet and edge == pointed_facet:
                         continue
                     is_active = edge in active_edge_set
-                    if is_active and flip_status is not None:
-                        flippable = flip_status.get(edge, False)
-                        ch_e   = "+"
-                        attr_e = curses.color_pair(
-                            _EDGE_PAIR_BASE + (2 if flippable else 3)
-                        )
-                    elif is_active:
-                        ch_e   = "+"
-                        attr_e = curses.color_pair(2) | curses.A_BOLD
-                    else:
-                        ch_e   = "."
-                        attr_e = curses.color_pair(1)
+                    ch_e, attr_e = _edge_attrs(edge, is_active, flip_status)
                     _draw_edge(a, b, ch_e, attr_e)
 
         if pointed_facet:
@@ -1101,10 +1095,7 @@ class Renderer:
             for dr, s in ((-1, "^^"), (0, "||")):
                 r, c = row + dr, col
                 if 0 <= r < rows - 1 and 0 <= c + 1 < cols - 1:
-                    try:
-                        scr.addstr(r, c, s, attr)
-                    except curses.error:
-                        pass
+                    _addstr(scr, r, c, s, attr)
 
 
         if is_irregular:
@@ -1118,10 +1109,7 @@ class Renderer:
                 _ir = _ii
                 _ic = 0
                 if 0 <= _ir < rows - 1:
-                    try:
-                        scr.addstr(_ir, _ic, _il[: cols - 1 - _ic], _ireg_attr)
-                    except curses.error:
-                        pass
+                    _addstr(scr, _ir, _ic, _il[: cols - 1 - _ic], _ireg_attr)
 
         facet_str = str(pointed_facet) if pointed_facet else "none"
         hud_base = (
@@ -1232,8 +1220,7 @@ def _flashlight_debug_dump(
         nn = float(np.linalg.norm(n))
         if nn > 1e-12:
             n = n / nn
-        if float(np.dot(n, vv[0])) < 0:
-            n = -n
+        n  = _orient_normal(n, vv[0])
         if float(np.dot(n, view_dir)) > 0:
             front.add(ct)
 
@@ -1243,8 +1230,7 @@ def _flashlight_debug_dump(
     curr_nn  = float(np.linalg.norm(curr_nf))
     if curr_nn > 1e-12:
         curr_nf = curr_nf / curr_nn
-    if float(np.dot(curr_nf, curr_vv[0])) < 0:
-        curr_nf = -curr_nf
+    curr_nf = _orient_normal(curr_nf, curr_vv[0])
     curr_c = (curr_vv[0] + curr_vv[1] + curr_vv[2]) / 3.0
 
     plane_d = float(np.dot(curr_c, curr_nf))
@@ -1275,8 +1261,7 @@ def _flashlight_debug_dump(
         nn = float(np.linalg.norm(nf))
         if nn > 1e-12:
             nf = nf / nn
-        if float(np.dot(nf, vv[0])) < 0:
-            nf = -nf
+        nf = _orient_normal(nf, vv[0])
         m3[ct] = (vv, c, nf)
 
     # ---- per-face occlusion (mirrors draw logic) ----------------------------

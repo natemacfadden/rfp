@@ -10,6 +10,11 @@ import numpy as np
 from src.display import run_display_demo
 
 
+def _parse_vec_arg(s: str) -> np.ndarray:
+    """Parse a comma-separated string like '1.0,2.0,3.0' into a float array."""
+    return np.array([float(x) for x in s.split(",")], dtype=float)
+
+
 def _fix_negative_args() -> None:
     """Join --pos/--heading with their value using '=' so argparse doesn't
     mistake a leading '-' in the value for a flag.
@@ -127,11 +132,8 @@ def main() -> None:
         fan = cube_fan(3)
         vc  = cube_vc(3)
 
-    def _parse_vec(s):
-        return np.array([float(x) for x in s.split(",")], dtype=float)
-
-    initial_pos       = _parse_vec(args.pos)     if args.pos     else None
-    initial_heading   = _parse_vec(args.heading) if args.heading else None
+    initial_pos       = _parse_vec_arg(args.pos)     if args.pos     else None
+    initial_heading   = _parse_vec_arg(args.heading) if args.heading else None
 
     agent = None
     if args.levy:

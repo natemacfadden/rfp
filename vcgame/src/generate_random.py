@@ -19,6 +19,8 @@ from regfans import VectorConfiguration
 if TYPE_CHECKING:
     from regfans import Fan
 
+_LATTICE_TOL = 1e-6
+
 
 def _surface_lattice_points(
     pts: list[list[int]],
@@ -61,7 +63,7 @@ def _surface_lattice_points(
             for v1 in range(lo[o1], hi[o1] + 1):
                 pv  = (-d - n[o0] * v0 - n[o1] * v1) / n[pivot]
                 pvi = round(pv)
-                if abs(pv - pvi) > 1e-6:
+                if abs(pv - pvi) > _LATTICE_TOL:
                     continue
                 if not (lo[pivot] <= pvi <= hi[pivot]):
                     continue
@@ -71,7 +73,7 @@ def _surface_lattice_points(
                 p[pivot] = pvi
                 p_arr    = np.array(p, dtype=float)
                 # Keep only if strictly inside or on all half-spaces.
-                if np.all(eqs @ np.append(p_arr, 1.0) <= 1e-6):
+                if np.all(eqs @ np.append(p_arr, 1.0) <= _LATTICE_TOL):
                     pt = tuple(p)
                     if pt != (0, 0, 0):
                         result.add(pt)
@@ -112,10 +114,10 @@ def random_vectors(
         v  = rng.integers(-max_coord, max_coord + 1, size=3)
         if np.all(v == 0):
             continue
-        vt = tuple(v.tolist())
-        vm = tuple((-v).tolist())
-        seen.add(vt)
-        seen.add(vm)
+        v_pos = tuple(v.tolist())
+        v_neg = tuple((-v).tolist())
+        seen.add(v_pos)
+        seen.add(v_neg)
 
     pts  = [list(p) for p in seen]
     hull = ConvexHull(pts)
