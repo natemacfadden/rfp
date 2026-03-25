@@ -152,13 +152,22 @@ def _draw_line(
     c1: int,
     ch: str,
     attr: int,
+    allow=None,
 ) -> None:
-    """Draw a line between two screen positions using Bresenham's algorithm."""
+    """Draw a line between two screen positions using Bresenham's algorithm.
+
+    Parameters
+    ----------
+    allow : callable(r, c) -> bool, optional
+        Per-pixel gate.  If provided, a pixel is only drawn when ``allow(r, c)``
+        returns True.  Used for depth-buffer occlusion of edges in flat mode.
+    """
     rows, cols = scr.getmaxyx()
 
     def put(r: int, c: int) -> None:
         if 0 <= r < rows - _HUD_ROWS and 0 <= c < cols - 1:
-            _addstr(scr, r, c, ch, attr)
+            if allow is None or allow(r, c):
+                _addstr(scr, r, c, ch, attr)
 
     dr, dc = abs(r1 - r0), abs(c1 - c0)
     sr = 1 if r1 > r0 else -1
@@ -751,8 +760,9 @@ class Renderer:
         agent_active: bool  = False,
         sun_angle:    float = 0.0,
         flashlight:   bool  = False,
-        symbol_mode:  int   = 0,
-        pixel_debug:  bool  = False,
+        symbol_mode:    int   = 0,
+        pixel_debug:    bool  = False,
+        edge_thickness: int   = 2,
     ) -> list[str] | None:
         """Render one frame.
 
@@ -895,6 +905,7 @@ class Renderer:
 
         # ── per-pixel fill pass ───────────────────────────────────────────────
         _pdbg_lines: list[str] | None = None
+        _depth_buf_raw: np.ndarray | None = None  # set in flat fill pass
         if color_mode != 0:
             _sym_ramp = _SYMBOL_STYLES[symbol_mode % len(_SYMBOL_STYLES)][1]
             _n_r      = self._n_radius
@@ -991,6 +1002,7 @@ class Renderer:
                 _hit_idx = np.full(_R * _C, -1, dtype=np.int32)
                 _valid_hits = _hit_front >= 0
                 _hit_idx[_valid_hits] = _front_full_idx[_hit_front[_valid_hits]]
+                _depth_buf_raw = _hit_idx  # 1-D view; edge pass reshapes as needed
 
                 # ── pixel debug ──────────────────────────────────────────────
                 if pixel_debug:
@@ -1231,6 +1243,16 @@ class Renderer:
                                     _sym_ramp[_sidxs[k]],
                                     curses.color_pair(int(_pairs[k])) | curses.A_BOLD)
 
+        # ── depth buffer for edge occlusion (flat mode only) ─────────────────
+        # Maps (r, c) → index into all_cones_list, or -1 if no face rendered.
+        _depth_buf: np.ndarray | None = (
+            _depth_buf_raw.reshape(rows - _HUD_ROWS, cols - 1)
+            if _depth_buf_raw is not None
+            else None
+        )
+        # Precompute frozensets of vector labels per cone for fast edge lookup.
+        _cone_vset: list[frozenset] = [frozenset(ct) for ct in all_cones_list]
+
         # ── screen_pt and _draw_edge closures (used by edge pass) ────────────
         def screen_pt(label: int) -> tuple[int, int] | None:
             coord = _project(ray(label), view_dir, e1_new, e2_new)
@@ -1243,6 +1265,19 @@ class Renderer:
             return (row, col)
 
         def _draw_edge(a: int, b: int, ch: str, attr: int) -> None:
+            _thick = max(1, edge_thickness)
+            # Build per-pixel occlusion gate for flat mode.
+            if _depth_buf is not None:
+                _edge_vset = frozenset({a, b})
+                _dbr, _dbc = _depth_buf.shape
+                def _allow(r: int, c: int) -> bool:
+                    if not (0 <= r < _dbr and 0 <= c < _dbc):
+                        return True
+                    cidx = int(_depth_buf[r, c])
+                    return cidx < 0 or _edge_vset.issubset(_cone_vset[cidx])
+            else:
+                _allow = None
+
             if not sphere_mode:
                 ca = _project(ray(a), view_dir, e1_new, e2_new)
                 cb = _project(ray(b), view_dir, e1_new, e2_new)
@@ -1252,8 +1287,8 @@ class Renderer:
                 r0 = cy - int(round(ca[1] * scale))
                 c1 = cx + int(round(cb[0] * scale * 2))
                 r1 = cy - int(round(cb[1] * scale))
-                _draw_line(scr, r0,     c0, r1,     c1, ch, attr)
-                _draw_line(scr, r0 + 1, c0, r1 + 1, c1, ch, attr)
+                for dt in range(_thick):
+                    _draw_line(scr, r0 + dt, c0, r1 + dt, c1, ch, attr, _allow)
                 return
             # Sphere mode: trace the great circle arc via SLERP.
             u = ray(a)
@@ -1279,8 +1314,9 @@ class Renderer:
                 col_w = cx + int(round(coord[0] * scale * 2))
                 row_w = cy - int(round(coord[1] * scale))
                 if prev is not None:
-                    _draw_line(scr, prev[0],     prev[1], row_w,     col_w, ch, attr)
-                    _draw_line(scr, prev[0] + 1, prev[1], row_w + 1, col_w, ch, attr)
+                    for dt in range(_thick):
+                        _draw_line(scr, prev[0] + dt, prev[1],
+                                   row_w + dt, col_w, ch, attr, _allow)
                 prev = (row_w, col_w)
 
         # ── edge pass ────────────────────────────────────────────────────────
@@ -1389,6 +1425,7 @@ class Renderer:
                       if locked else curses.color_pair(4))
         col_str    = f"  [1/2]fill:{_COLOR_LABELS[color_mode]}"
         sym_str    = f"  [8/9/0]sym:{_SYMBOL_STYLES[symbol_mode % len(_SYMBOL_STYLES)][0]}"
+        thk_str    = f"  [T]thick:{edge_thickness}"
         lit_str    = "  [F]light:ON" if flashlight else "  [F]light:off"
         lit_attr   = (curses.color_pair(2) | curses.A_BOLD
                       if flashlight else curses.color_pair(4))
@@ -1452,8 +1489,13 @@ class Renderer:
                 scr.addstr(r1, col_col,
                            lit_str[: del_col - col_col], lit_attr)
             if del_col < cols - 1:
+                _lock_w = len(lock_str)
                 scr.addstr(r1, del_col,
                            lock_str[: cols - 1 - del_col], lock_attr)
+                _thk_col = del_col + _lock_w
+                if _thk_col < cols - 1:
+                    scr.addstr(r1, _thk_col,
+                               thk_str[: cols - 1 - _thk_col], curses.color_pair(4))
 
         except curses.error:
             pass

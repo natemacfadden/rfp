@@ -393,7 +393,8 @@ def run_display_demo(
 
         _agent_rate = 1.0   # steps per frame (can be fractional)
         _agent_acc  = 0.0   # fractional accumulator
-        _debug_on   = False  # whether debug overlay is visible
+        _debug_on       = False  # whether debug overlay is visible
+        _edge_thickness = 2
         _frame_count = 0
 
         try:
@@ -426,7 +427,8 @@ def run_display_demo(
                                       sphere_mode, agent_active, _sun_angle,
                                       flashlight=flashlight_on,
                                       symbol_mode=symbol_mode,
-                                      pixel_debug=_debug_on)
+                                      pixel_debug=_debug_on,
+                                      edge_thickness=_edge_thickness)
                 _sun_angle += _SUN_ROT_RATE
 
                 if _debug_on:
@@ -495,6 +497,8 @@ def run_display_demo(
                         symbol_mode = 1
                     elif key == ord("0"):
                         symbol_mode = 2
+                    elif key == ord("t"):
+                        _edge_thickness = (_edge_thickness % 3) + 1
                 if _quit:
                     break
 
