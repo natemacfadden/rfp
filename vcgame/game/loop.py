@@ -501,6 +501,8 @@ def run_display_demo(
                         symbol_mode = 3
                     elif key == ord("0"):
                         symbol_mode = 4
+                    elif key == ord("-"):
+                        symbol_mode = 5
                     elif key == ord("t"):
                         _edge_thickness = 2 if _edge_thickness == 1 else 1
                 if _quit:

@@ -40,6 +40,7 @@ _SYMBOL_STYLES: tuple = (
     ("quadrant", " \u2596\u259a\u2599\u2588"),           # (sp)▖▚▙█
     ("vert",     "\u258f\u258e\u258d\u258c\u258b\u258a\u2589\u2588"),  # ▏▎▍▌▋▊▉█
     ("horiz",    "\u2581\u2582\u2583\u2584\u2585\u2586\u2587\u2588"),  # ▁▂▃▄▅▆▇█
+    ("digits",   "123456789"),                           # 1–9
 )
 _M3_HEIGHT     = 0.003  # player elevation above current face (flashlight mode)
 _M3_THETA_MAX  = 55.0   # flashlight cone half-angle from heading, degrees
@@ -1438,7 +1439,7 @@ class Renderer:
         lock_attr  = (curses.color_pair(2) | curses.A_BOLD
                       if locked else curses.color_pair(4))
         col_str    = f"  [1/2]fill:{_COLOR_LABELS[color_mode]}"
-        sym_str    = f"  [6-0]sym:{_SYMBOL_STYLES[symbol_mode % len(_SYMBOL_STYLES)][0]}"
+        sym_str    = f"  [6-0/-]sym:{_SYMBOL_STYLES[symbol_mode % len(_SYMBOL_STYLES)][0]}"
         thk_str    = f"  [T]thick:{edge_thickness}"
         lit_str    = "  [F]lash:ON" if flashlight else "  [F]lash:off"
         lit_attr   = (curses.color_pair(2) | curses.A_BOLD
