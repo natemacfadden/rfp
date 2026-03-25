@@ -455,7 +455,7 @@ def _fl_brightness_pixel(
     cos_a = float(np.dot(dv / dist, h_proj))
     if cos_a <= cos_tmax:
         return 0.0
-    if _shadow_blocked(p_src, hit_pos, v0s, v1s, v2s, skip_idx=curr_idx):
+    if _shadow_blocked(p_src, hit_pos, v0s, v1s, v2s):
         return 0.0
     fl = (cos_a - cos_tmax) / (1.0 - cos_tmax)
     return fl * fl * fl / (1.0 + 20.0 * dist * dist)
@@ -752,8 +752,13 @@ class Renderer:
         sun_angle:    float = 0.0,
         flashlight:   bool  = False,
         symbol_mode:  int   = 0,
-    ) -> None:
-        """Render one frame."""
+        pixel_debug:  bool  = False,
+    ) -> list[str] | None:
+        """Render one frame.
+
+        Returns a list of debug lines if ``pixel_debug=True`` and flat mode is
+        active, otherwise None.
+        """
 
         # ── setup ────────────────────────────────────────────────────────────
         scr = self._stdscr
@@ -843,7 +848,8 @@ class Renderer:
         curr_vs     = cone_verts.get(curr_ct, [np.array([1.,0.,0.])]*3)
         curr_normal = cone_normals.get(curr_ct, p)
         p_surface   = _compute_p_surface(p, curr_vs[0], curr_normal)
-        screen_center = p_surface + _FOV_DIST * p
+        _max_vec_norm = float(np.linalg.norm(fan.vectors(), axis=1).max()) or 1.0
+        screen_center = (_max_vec_norm + 1e-6) * p
 
         # ── mode precompute ───────────────────────────────────────────────────
         r_max: float = 1.0
@@ -883,16 +889,12 @@ class Renderer:
             p_src    = p_surface + _M3_HEIGHT * curr_normal
             cos_tmax = float(np.cos(np.radians(_M3_THETA_MAX)))
             # Project heading onto face plane for the 3D cone gate.
-            cam_denom = float(np.dot(p, curr_normal))
-            if abs(cam_denom) > 1e-12:
-                r_proj      = float(np.dot(e1_new, curr_normal)) / cam_denom
-                h_face_raw  = e1_new - r_proj * p
-            else:
-                h_face_raw  = e1_new - float(np.dot(e1_new, curr_normal)) * curr_normal
+            h_face_raw  = e1_new - float(np.dot(e1_new, curr_normal)) * curr_normal
             h_face_norm = float(np.linalg.norm(h_face_raw))
             h_proj      = h_face_raw / h_face_norm if h_face_norm > 1e-12 else e1_new
 
         # ── per-pixel fill pass ───────────────────────────────────────────────
+        _pdbg_lines: list[str] | None = None
         if color_mode != 0:
             _sym_ramp = _SYMBOL_STYLES[symbol_mode % len(_SYMBOL_STYLES)][1]
             _n_r      = self._n_radius
@@ -978,10 +980,109 @@ class Renderer:
                 _best_t, _hit_front = _hit_pixels_numba(
                     _all_pix, _fl_N_mat, _fl_c_vec, _fl_H_mat, dir_vec,
                 )
+                _neg_hits = np.isfinite(_best_t) & (_best_t < 0)
+                if np.any(_neg_hits):
+                    raise RuntimeError(
+                        f"_hit_pixels_numba returned {int(_neg_hits.sum())} negative-t "
+                        f"hits (min={float(_best_t[_neg_hits].min()):.4f}). "
+                        "Screen plane is inside the polytope — increase screen distance."
+                    )
                 # map front-facing indices back to all_cones_list indices
                 _hit_idx = np.full(_R * _C, -1, dtype=np.int32)
                 _valid_hits = _hit_front >= 0
                 _hit_idx[_valid_hits] = _front_full_idx[_hit_front[_valid_hits]]
+
+                # ── pixel debug ──────────────────────────────────────────────
+                if pixel_debug:
+                    _PCHARS = (
+                        "0123456789"
+                        "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+                        "abcdefghijklmnopqrstuvwxyz"
+                        "+!@#$%^&*~"
+                    )
+                    _hm = _hit_idx.reshape(_R, _C)
+                    _pdbg_lines = []
+                    _pdbg_lines.append(
+                        "── PIXEL HIT MAP (char=face, ·=miss) ──"
+                    )
+                    for _pr in range(0, _R, 2):
+                        _pdbg_lines.append("".join(
+                            "·" if _hm[_pr, _pc] < 0
+                            else _PCHARS[_hm[_pr, _pc] % len(_PCHARS)]
+                            for _pc in range(_C)
+                        ))
+                    _n_miss = int((_hm < 0).sum())
+                    _n_hit  = _R * _C - _n_miss
+                    _pdbg_lines.append(f"")
+                    _pdbg_lines.append(
+                        f"Hit: {_n_hit}/{_R*_C}  Miss: {_n_miss}"
+                        f"  front-facing cones: {len(_front_full_idx)}"
+                    )
+                    # Interior miss pixels (within bounding box of hits).
+                    if _n_miss > 0 and _n_hit > 0:
+                        _hr = np.where(np.any(_hm >= 0, axis=1))[0]
+                        _hc = np.where(np.any(_hm >= 0, axis=0))[0]
+                        if len(_hr) and len(_hc):
+                            _rlo, _rhi = int(_hr[0]),  int(_hr[-1])
+                            _clo, _chi = int(_hc[0]),  int(_hc[-1])
+                            _ri = np.arange(_R)[:, None]
+                            _ci = np.arange(_C)[None, :]
+                            _int_miss = np.argwhere(
+                                (_hm < 0)
+                                & (_ri >= _rlo) & (_ri <= _rhi)
+                                & (_ci >= _clo) & (_ci <= _chi)
+                            )
+                            _pdbg_lines.append(
+                                f"Interior miss "
+                                f"(bbox r={_rlo}-{_rhi} c={_clo}-{_chi}): "
+                                f"{len(_int_miss)}"
+                            )
+                            # Near-miss details for up to 10 interior misses.
+                            _Kf = len(_front_full_idx)
+                            for _mr, _mc in _int_miss[:10]:
+                                _mi   = int(_mr) * _C + int(_mc)
+                                _orig = _all_pix[_mi]
+                                _near: list = []
+                                for _fk in range(_Kf):
+                                    _nd = float(
+                                        _fl_N_mat[_fk, 0] * dir_vec[0]
+                                        + _fl_N_mat[_fk, 1] * dir_vec[1]
+                                        + _fl_N_mat[_fk, 2] * dir_vec[2]
+                                    )
+                                    if abs(_nd) < 1e-12:
+                                        continue
+                                    _od = float(
+                                        _fl_N_mat[_fk, 0] * _orig[0]
+                                        + _fl_N_mat[_fk, 1] * _orig[1]
+                                        + _fl_N_mat[_fk, 2] * _orig[2]
+                                    )
+                                    _tt = (float(_fl_c_vec[_fk]) - _od) / _nd
+                                    if _tt <= 1e-6:
+                                        continue
+                                    _hp = _orig + _tt * dir_vec
+                                    _sc = [
+                                        float(
+                                            _fl_H_mat[_fk, _h, 0] * _hp[0]
+                                            + _fl_H_mat[_fk, _h, 1] * _hp[1]
+                                            + _fl_H_mat[_fk, _h, 2] * _hp[2]
+                                        )
+                                        for _h in range(3)
+                                    ]
+                                    _near.append((
+                                        min(_sc), _tt,
+                                        all_cones_list[int(_front_full_idx[_fk])],
+                                        _sc,
+                                    ))
+                                _near.sort(key=lambda x: -x[0])
+                                _pdbg_lines.append(
+                                    f"  Miss r={_mr} c={_mc}:"
+                                )
+                                for _ms, _tt2, _fct, _scs in _near[:5]:
+                                    _pdbg_lines.append(
+                                        f"    {str(_fct):<22} t={_tt2:.4f}"
+                                        f"  min_score={_ms:.3e}"
+                                        f"  [{_scs[0]:.3e},{_scs[1]:.3e},{_scs[2]:.3e}]"
+                                    )
 
                 _hit_flat = np.where(_hit_idx >= 0)[0]
                 if len(_hit_flat):
@@ -1099,7 +1200,7 @@ class Renderer:
                             _dv_u    = _dv / np.maximum(_dists_f[:, None], 1e-12)
                             _cos_a   = _dv_u @ h_proj               # (NP,)
                             _in_cone = _cos_a > cos_tmax
-                            _skip_fl = np.full(_NP, _ct_to_idx[curr_ct], dtype=np.int32)
+                            _skip_fl = np.full(_NP, -1, dtype=np.int32)
                             _shad_fl = _shadow_blocked_all(
                                 _hit_pos, p_src,
                                 _all_v0s, _all_v1s, _all_v2s, _skip_fl,
@@ -1357,3 +1458,5 @@ class Renderer:
 
         except curses.error:
             pass
+
+        return _pdbg_lines

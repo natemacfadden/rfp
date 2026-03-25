@@ -136,9 +136,9 @@ def _flashlight_debug_dump(
         dir0 = dv / dist0
         ok   = True
         for ct1, (vv1, c1, nf1) in m3.items():
-            if ct1 == ct0 or ct1 == cone:
+            if ct1 == ct0:
                 continue
-            if float(np.dot(nf1, curr_nf)) > 0.99:
+            if ct1 != cone and float(np.dot(nf1, curr_nf)) > 0.99:
                 continue
             t1 = _ray_intersects_triangle(p_src, dir0, vv1[0], vv1[1], vv1[2])
             if t1 is not None and EPS < t1 < dist0 - 1e-3:
@@ -149,7 +149,7 @@ def _flashlight_debug_dump(
     # ---- write report -------------------------------------------------------
     L: list[str] = []
     L.append("=" * 70)
-    L.append("FLASHLIGHT DEBUG DUMP")
+    L.append(f"FLASHLIGHT DEBUG DUMP  {time.strftime('%Y-%m-%d %H:%M:%S')}")
     L.append("=" * 70)
     if cli_cmd:
         L.append(f"cli     : {cli_cmd}")
@@ -264,6 +264,7 @@ def run_display_demo(
     _view_scale     = _TARGET_NORM / _max_norm
     _allow_deletion  = allow_deletion   # capture before _main shadows the name
     _pending_prints: list[str] = []    # snapshots queued by 'p', printed after curses exits
+    _debug_log_path  = "/tmp/vcgame_debug.txt"
 
     def _snapshot(f: object) -> str:
         """Return a human-readable summary of vectors and simplices."""
@@ -422,12 +423,13 @@ def run_display_demo(
                             _ok = True
                             break
                     _flip_status[_ek] = _ok
-                renderer.draw(player.direction, player.heading, cone,
-                              facet, locked, allow_deletion, color_mode,
-                              _view_scale, _flip_status, _irregularity[0],
-                              sphere_mode, agent_active, _sun_angle,
-                              flashlight=flashlight_on,
-                              symbol_mode=symbol_mode)
+                _pdbg = renderer.draw(player.direction, player.heading, cone,
+                                      facet, locked, allow_deletion, color_mode,
+                                      _view_scale, _flip_status, _irregularity[0],
+                                      sphere_mode, agent_active, _sun_angle,
+                                      flashlight=flashlight_on,
+                                      symbol_mode=symbol_mode,
+                                      pixel_debug=_debug_on)
                 _sun_angle += _SUN_ROT_RATE
 
                 if _debug_on:
@@ -435,6 +437,11 @@ def run_display_demo(
                         player, nonlocal_fan[0], stdscr, _view_scale,
                         vectors=vectors, cli_cmd=cli_cmd,
                     )
+                    with open(_debug_log_path, "w") as _df:
+                        _df.write("\n".join(_dbg_lines) + "\n")
+                        if _pdbg:
+                            _df.write("\n")
+                            _df.write("\n".join(_pdbg) + "\n")
                     _dbg_rows, _dbg_cols = stdscr.getmaxyx()
                     _dbg_attr = curses.A_REVERSE
                     for _di, _dl in enumerate(_dbg_lines):
