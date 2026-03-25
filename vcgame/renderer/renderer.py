@@ -60,6 +60,11 @@ _HUD_ROWS = 2  # number of rows reserved at screen bottom for HUD
 # Acts as the FOV parameter: larger = narrower field of view.
 _FOV_DIST: float = 1.0
 
+# Halfspace containment tolerance.  A point is considered inside a cone wall
+# if  h · x  >=  -_HALFSPACE_TOL.  Used identically in the sphere path and
+# the flat/numba path so the two modes never disagree at cone boundaries.
+_HALFSPACE_TOL: float = 1e-9
+
 
 # ---------------------------------------------------------------------------
 # Curses helpers
@@ -76,6 +81,13 @@ def _addstr(scr, r: int, c: int, text: str, attr: int = 0) -> None:
 def _orient_normal(n: np.ndarray, ref: np.ndarray) -> np.ndarray:
     """Return n flipped so it points toward ref (dot(n, ref) > 0)."""
     return n if np.dot(n, ref) >= 0.0 else -n
+
+
+def _primitive(v: np.ndarray) -> np.ndarray:
+    """Return the primitive integer vector along v (divide by gcd of coords)."""
+    iv = np.round(v).astype(int)
+    g = math.gcd(*[abs(int(x)) for x in iv])
+    return iv // g if g > 0 else iv
 
 
 def _edge_attrs(
@@ -223,7 +235,7 @@ def _ray_intersects_triangle(
     e2 = v2 - v0
     h  = np.cross(d, e2)
     a  = float(np.dot(e1, h))
-    if abs(a) < 1e-8:
+    if abs(a) < 1e-10:
         return None
     f  = 1.0 / a
     s  = orig - v0
@@ -402,7 +414,7 @@ def _shadow_blocked(
     h     = np.cross(d, edge2)                      # (T, 3)
     a     = np.einsum('ti,ti->t', edge1, h)         # (T,)
 
-    mask = np.abs(a) >= 1e-8
+    mask = np.abs(a) >= 1e-10
     if 0 <= skip_idx < len(mask):
         mask[skip_idx] = False
     if not np.any(mask):
@@ -621,7 +633,7 @@ def _shadow_blocked_all(
             hy = dz*e2x - dx*e2z
             hz = dx*e2y - dy*e2x
             a  = e1x*hx + e1y*hy + e1z*hz
-            if abs(a) < 1e-8:
+            if abs(a) < 1e-10:
                 continue
 
             f  = 1.0 / a
@@ -709,7 +721,7 @@ def _hit_pixels_numba(
                 score = d_scores[k, h] * t
                 for j in range(3):
                     score += H_mat[k, h, j] * all_pix[i, j]
-                if score < -1e-9:
+                if score < -_HALFSPACE_TOL:
                     inside = False
                     break
             if inside and t < best_t[i]:
@@ -847,9 +859,9 @@ class Renderer:
         _fl_H_list = []
         for i in _front_full_idx:
             r0, r1, r2 = cone_verts[all_cones_list[i]]
-            h01 = np.cross(r0, r1); h01 = h01 if np.dot(h01, r2) >= 0 else -h01
-            h12 = np.cross(r1, r2); h12 = h12 if np.dot(h12, r0) >= 0 else -h12
-            h20 = np.cross(r2, r0); h20 = h20 if np.dot(h20, r1) >= 0 else -h20
+            h01 = _primitive(np.cross(r0, r1)); h01 = h01 if np.dot(h01, r2) >= 0 else -h01
+            h12 = _primitive(np.cross(r1, r2)); h12 = h12 if np.dot(h12, r0) >= 0 else -h12
+            h20 = _primitive(np.cross(r2, r0)); h20 = h20 if np.dot(h20, r1) >= 0 else -h20
             _fl_H_list.append(np.stack([h01, h12, h20]))
         _fl_H_mat = np.array(_fl_H_list) if _fl_H_list else np.zeros((0, 3, 3))
 
@@ -942,7 +954,7 @@ class Renderer:
                     hit_pts = pixel_row - t_vals[:, np.newaxis] * p[np.newaxis, :]
                     norms   = np.linalg.norm(hit_pts, axis=1, keepdims=True)
                     hit_pts = np.where(norms > 1e-12, hit_pts / norms, hit_pts)
-                    tol = -1e-9
+                    tol = -_HALFSPACE_TOL
                     in_AB  = (hit_pts @ nAB_mat.T) >= tol
                     in_BC  = (hit_pts @ nBC_mat.T) >= tol
                     in_CA  = (hit_pts @ nCA_mat.T) >= tol
@@ -1426,12 +1438,12 @@ class Renderer:
         col_str    = f"  [1/2]fill:{_COLOR_LABELS[color_mode]}"
         sym_str    = f"  [8/9/0]sym:{_SYMBOL_STYLES[symbol_mode % len(_SYMBOL_STYLES)][0]}"
         thk_str    = f"  [T]thick:{edge_thickness}"
-        lit_str    = "  [F]light:ON" if flashlight else "  [F]light:off"
+        lit_str    = "  [F]lash:ON" if flashlight else "  [F]lash:off"
         lit_attr   = (curses.color_pair(2) | curses.A_BOLD
                       if flashlight else curses.color_pair(4))
 
         # ── HUD row 0 (rows-2): [q]uit  cone=…  [S]sphere  [1/2]fill  [D]el  [A]agent  [P]dbg
-        # ── HUD row 1 (rows-1):          facet=…  [8/9/0]sym  [F]light  [L]fix
+        # ── HUD row 1 (rows-1):          facet=…  [8/9/0]sym  [F]lash  [L]fix
         try:
             _blank = " " * (cols - 1)
             for _hr in range(_HUD_ROWS):

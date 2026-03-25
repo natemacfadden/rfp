@@ -203,7 +203,16 @@ class Player:
         v0, v1, v2 = verts[0], verts[1], verts[2]
         n     = np.cross(v1 - v0, v2 - v0)
         d     = self._direction
-        return float(np.dot(n, v0) / np.dot(n, d))
+        n_norm = float(np.linalg.norm(n))
+        denom  = float(np.dot(n, d))
+        if n_norm < 1e-12 or abs(denom) < 1e-10:
+            warnings.warn(
+                f"surface_radius: degenerate cone {cone} "
+                f"(|n|={n_norm:.2e}, n·d={denom:.2e}); "
+                f"keeping previous radius"
+            )
+            return float(self._position[0])
+        return float(np.dot(n, v0) / denom)
 
     def move(
         self, step: float, fan: Fan | None = None,
@@ -226,6 +235,25 @@ class Player:
             Sorted label pair of the crossed facet, or ``None``.
         """
         old_cone = self.current_cone(fan) if fan is not None else None
+
+        if fan is not None and old_cone is not None:
+            verts = fan.vectors(which=old_cone)
+            r0, r1, r2 = verts[0], verts[1], verts[2]
+            h01 = np.cross(r0, r1); h01 = h01 if np.dot(h01, r2) >= 0 else -h01
+            h12 = np.cross(r1, r2); h12 = h12 if np.dot(h12, r0) >= 0 else -h12
+            h20 = np.cross(r2, r0); h20 = h20 if np.dot(h20, r1) >= 0 else -h20
+            d0 = self._direction
+            margins = [float(np.dot(h, d0)) for h in (h01, h12, h20)]
+            norms   = [float(np.linalg.norm(h)) for h in (h01, h12, h20)]
+            # Angular size of the smallest wall gap ~ margin / (|h| * |d|)
+            ang_gaps = [
+                m / n for m, n in zip(margins, norms) if n > 1e-12 and m > 0
+            ]
+            if ang_gaps and abs(step) > 0.5 * min(ang_gaps):
+                warnings.warn(
+                    f"move(): step={step:.4f} may skip a cone wall "
+                    f"(smallest angular gap ~ {min(ang_gaps):.4f})"
+                )
 
         d, h = self._direction, self._heading
         c, s = np.cos(step), np.sin(step)
@@ -311,12 +339,24 @@ class Player:
             If no cone contains the direction.
         """
         d = self._direction
+        best_cone   = None
+        best_margin = -np.inf  # min halfspace score across the three walls
         for cone in fan.cones():
-            alpha, _, _, _ = np.linalg.lstsq(
-                fan.vectors(which=cone).T, d, rcond=None
-            )
-            if np.all(alpha > -1e-10):
-                return cone
+            verts = fan.vectors(which=cone)
+            r0, r1, r2 = verts[0], verts[1], verts[2]
+            h01 = np.cross(r0, r1); h01 = h01 if np.dot(h01, r2) >= 0 else -h01
+            h12 = np.cross(r1, r2); h12 = h12 if np.dot(h12, r0) >= 0 else -h12
+            h20 = np.cross(r2, r0); h20 = h20 if np.dot(h20, r1) >= 0 else -h20
+            margin = float(min(np.dot(h01, d), np.dot(h12, d), np.dot(h20, d)))
+            if margin >= 0 or margin > best_margin:
+                # Accept the cone with the best (largest) minimum margin;
+                # a non-negative margin means d is strictly inside.
+                best_margin = margin
+                best_cone   = cone
+                if margin >= 0:
+                    return cone   # strict interior — no need to keep searching
+        if best_cone is not None and best_margin > -1e-6:
+            return best_cone      # on or near a wall — return closest cone
         raise ValueError("position is not contained in any cone of the fan")
 
     def find_circuit_for_crossing(
