@@ -45,7 +45,8 @@ The player navigates a simplicial fan by moving along geodesics on the 2-sphere.
 a wall between cones performs a **bistellar flip**, modifying the triangulation live. The
 fan can be locked for free exploration without flipping.
 
-Requires [regfans](https://github.com/natemacfadden/regfans), numpy, and pynput.
+Requires [regfans](https://github.com/natemacfadden/regfans) and numpy. It works best if
+pynput is also installed.
 
 ```bash
 cd vcgame
