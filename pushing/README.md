@@ -7,8 +7,8 @@ The final call is likely the most interesting, as this is a cheap way to get sem
 
 ## Details
 Definitions (see [DRS](https://doi.org/10.1007/978-3-642-12971-1)):
-- a *vector configuration* (VC) is a collection of labeled vectors. Its support is a a convex cone
-- a *point configuration* (VC) is a collection of labeled points. Its support is a a polytope. Any PC can be treated as a VC by 'homogenization' - replace $pt \leftarrow (1,pt)$.
+- a *vector configuration* (VC) is a collection of labeled vectors. Its support is a convex cone
+- a *point configuration* (PC) is a collection of labeled points. Its support is a polytope. Any PC can be treated as a VC by 'homogenization' - replace $pt \leftarrow (1,pt)$.
 - a *triangulation* is decomposition of the support of the VC into simplicial sub-regions. I.e., into simplicial cones
 - a *fine* triangulation 'uses' all vectors in the VC. I.e., each vector is a generator of a simplicial cone
 - a *regular* triangulation can be constructed via a lifting procedure (embed the vectors in 1-higher dimension, assign heights to them, treat the lower facets as the triangulation)
@@ -21,7 +21,7 @@ As with TOPCOM, this also applies to point configurations (PCs/polytopes) if you
 
 The greedy method seems to always generate a fine triangulation for a PC (i.e., an acyclic VC). For general VCs, sometimes the greedy algorithm gets stuck in a situation where it cannot add more vectors due to the previously added vectors.
 
-No duplication checking is performed...
+No duplication checking is performed.
 
 ## Compilation/running
 
