@@ -1,7 +1,7 @@
 # Overview
 Constructs a pushing triangulation of a point/vector configuration. Optional configurations include
 - constructing a *random* pushing triangulation
-- constructing a random & *fine* pushing triangulation (or at least trying to).
+- constructing a random & *fine* pushing triangulation (or at least try to).
 
 The final call is likely the most interesting, as this is a cheap way to get semi-random fine regular triangulations of arbitrary-dimensional PCs. The tech works for VCs, too, but sometimes gets caught in deadlocks where no new vectors can be pushed while preserving fineness. This final method (specifically for PCs) was inspired by [TOPCOM](https://www.wm.uni-bayreuth.de/de/team/rambau_joerg/TOPCOM/)'s fine triangulation method.
 
