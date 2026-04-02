@@ -22,8 +22,8 @@ triangulations — useful as an alternative to full flip-graph traversal. See
 Example configurations (various dimensions) are provided in `data/`. Compile and run with:
 
 ```bash
-clang -o pushing pushing/src/demo.c
-./pushing < ./data/20x20x20.dat
+clang -o rfp pushing/src/demo.c
+./rfp < ./data/20x20x20.dat
 ```
 
 or, more interactively

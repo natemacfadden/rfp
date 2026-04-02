@@ -5,7 +5,7 @@
 Usage: python3 live_triplot.py [--data <file>] [--n <int>] [--fct <path>] [--random] [--fine]
   --data    <file>  Input data file (required)
   --n       <int>   Number of seeds to run (default: 100)
-  --fct     <path>  Path to pushing binary (default: ./pushing)
+  --fct     <path>  Path to pushing binary (default: ./rfp)
   --random          Pass --random to the binary
   --fine            Pass --fine to the binary (implies --random)
 """
@@ -19,7 +19,7 @@ import matplotlib.pyplot as plt
 def parse_args():
     data   = None
     n      = 100
-    fct    = "./pushing"
+    fct    = "./rfp"
     random = False
     fine   = False
     args = sys.argv[1:]
