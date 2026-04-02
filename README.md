@@ -9,7 +9,7 @@ A C library for constructing pushing triangulations of point/vector configuratio
 with optional randomization and fineness.
 
 A *pushing triangulation* assigns an order to the points/vectors, constructing a
-simplex from the first points/vectors and then incrementally adding new ones by
+simplex from the first $N$ points/vectors and then incrementally adding new ones by
 connecting new points/vectors to the externally-visible facets. This also has
 interpretation of assigning exponentially-spaced heights $h_i = c^i$ to the vectors, for
 sufficiently large $c$. This latter interpretation shows that such triangulations are
