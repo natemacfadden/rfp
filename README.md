@@ -1,4 +1,4 @@
-# ntt
+# ntt - Nate's Triangulation Toys
 *[Nate MacFadden](https://github.com/natemacfadden), Liam McAllister Group, Cornell*
 
 A collection of triangulation toys for studying lattice point/vector configurations.
