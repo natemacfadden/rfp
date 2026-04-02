@@ -23,7 +23,7 @@ Example configurations (various dimensions) are provided in `data/`. Compile and
 
 ```bash
 clang -o rfp pushing/src/demo.c
-./data/ncube 5 | ./rfp -n 1000
+./rfp < ./data/20x20x20.dat
 ```
 
 or, more interactively
