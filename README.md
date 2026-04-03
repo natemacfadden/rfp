@@ -64,6 +64,4 @@ python main.py --shape trunc_oct
 python main.py --shape reflexive --polytope_id 7
 ```
 
-Much of `vcgame` was developed with the assistance of
-[Claude Code](https://claude.ai/claude-code) (Anthropic), as a test/warm-up project for
-semi-hands-off agentic software development for projects semi-close to research.
+`vcgame` was built with [Claude Code](https://claude.ai/claude-code).
