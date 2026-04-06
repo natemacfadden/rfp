@@ -19,6 +19,33 @@ import numpy as np
 from scipy.spatial import ConvexHull
 
 
+def ccw(a, b, c) -> int:
+    """Twice the signed area of triangle (a, b, c). Positive = CCW."""
+    return int((b[0]-a[0])*(c[1]-a[1]) - (b[1]-a[1])*(c[0]-a[0]))
+
+
+def triangle_area_2x(pts) -> int:
+    """Twice the area of triangle given by pts[0], pts[1], pts[2]."""
+    return abs(ccw(pts[0], pts[1], pts[2]))
+
+
+def intersect(a, b, c, d) -> bool:
+    """
+    True if open segment (a,b) properly crosses open segment (c,d).
+    Shared endpoints are not considered intersections.
+    """
+    if set(map(tuple, [a, b])) & set(map(tuple, [c, d])):
+        return False
+    d1 = ccw(c, d, a)
+    d2 = ccw(c, d, b)
+    d3 = ccw(a, b, c)
+    d4 = ccw(a, b, d)
+    if ((d1 > 0 and d2 < 0) or (d1 < 0 and d2 > 0)) and \
+       ((d3 > 0 and d4 < 0) or (d3 < 0 and d4 > 0)):
+        return True
+    return False
+
+
 def get_bdry(pts: np.ndarray) -> set:
     """
     Compute boundary edges of a 2D convex lattice polygon.

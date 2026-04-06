@@ -20,7 +20,7 @@ Live-updating triplot: grow a fine triangulation seed-by-seed and display each.
 
 Usage::
 
-    python live_triplot.py --data <file> [--n <int>] [--seed <int>]
+    python live_triplot.py --data <file> [--n <int>] [--seed <int>] [--python]
 
 Options
 -------
@@ -30,6 +30,8 @@ Options
     Number of seeds to run (default: 100).
 --seed <int>
     Starting seed (default: 0).
+--python
+    Use the pure-Python backend instead of the C backend.
 """
 
 import re
@@ -39,26 +41,18 @@ import os
 import matplotlib.pyplot as plt
 import numpy as np
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
-from grow import grow2d
-from geometry import get_bdry
+src_dir      = os.path.join(os.path.dirname(os.path.abspath(__file__)), "src")
+archived_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "archived")
 
 # =============================================================================
 # Argument parsing
 # =============================================================================
 
 def parse_args():
-    """Parse command-line arguments.
-
-    Returns
-    -------
-    data_file : str
-    n_seeds : int
-    start_seed : int
-    """
     data       = None
     n          = 100
     start_seed = 0
+    use_python = False
 
     args = sys.argv[1:]
     while args:
@@ -68,19 +62,37 @@ def parse_args():
             n = int(args[1]); args = args[2:]
         elif args[0] == "--seed" and len(args) > 1:
             start_seed = int(args[1]); args = args[2:]
+        elif args[0] == "--python":
+            use_python = True; args = args[1:]
         else:
             sys.exit(f"Unknown argument: {args[0]}\n{__doc__.strip()}")
 
     if data is None:
         sys.exit(f"--data is required\n{__doc__.strip()}")
 
-    return data, n, start_seed
+    return data, n, start_seed, use_python
 
 # =============================================================================
 # Main
 # =============================================================================
 
-data_file, n_seeds, start_seed = parse_args()
+data_file, n_seeds, start_seed, use_python = parse_args()
+
+if use_python:
+    sys.path.insert(0, archived_dir)
+    from geometry import get_bdry
+    from grow import grow2d as _grow2d
+    def run_grow2d(pts, bdry, seed):
+        simps = _grow2d(pts, bdry=bdry, seed=seed)
+        return np.array(sorted(simps))
+else:
+    sys.path.insert(0, src_dir)
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from geometry import get_bdry
+    from grow2d import grow2d as _grow2d
+    def run_grow2d(pts, bdry, seed):
+        simps_arr, _ = _grow2d(pts, bdry=bdry, seed=seed)
+        return simps_arr
 
 with open(data_file) as f:
     raw = f.read().strip()
@@ -103,6 +115,8 @@ if pts.shape[1] > 2:
 if pts.shape[1] != 2:
     sys.exit(f"Expected 2D points after dehomogenization, got shape {pts.shape}")
 
+backend = "python" if use_python else "C"
+
 # pre-compute boundary (shared across seeds)
 bdry = get_bdry(pts.astype(int))
 
@@ -110,12 +124,11 @@ plt.ion()
 fig, ax = plt.subplots()
 
 for i, seed in enumerate(range(start_seed, start_seed + n_seeds)):
-    simps = grow2d(pts.astype(int), bdry=bdry, seed=seed)
-    simps_arr = np.array(sorted(simps))
+    simps_arr = run_grow2d(pts.astype(int), bdry, seed)
 
     ax.cla()
     ax.set_aspect("auto")
-    ax.set_title(f"grow2d  seed={seed}  ({i+1}/{n_seeds})")
+    ax.set_title(f"grow2d [{backend}]  seed={seed}  ({i+1}/{n_seeds})")
     ax.triplot(pts[:, 0], pts[:, 1], simps_arr, color="steelblue", linewidth=0.8)
     ax.scatter(pts[:, 0], pts[:, 1], s=18, color="steelblue", zorder=3)
     ax.set_xticks([])
