@@ -66,6 +66,7 @@ int pushing(
 #define MAX_DIM 8
 #endif
 
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -75,7 +76,7 @@ int pushing(
 #endif
 
 
-// EXTERNAL METHODS (copied in full; modifications marked)
+// EXTERNAL METHODS (copied and then modified a bit for syntax/similar)
 // ----------------
 /*  Written in 2019 by David Blackman and Sebastiano Vigna (vigna@acm.org)
 
@@ -94,8 +95,6 @@ WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
 ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR
 IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE. */
 
-#include <stdint.h>
-
 /* This is xoshiro256++ 1.0, one of our all-purpose, rock-solid generators.
    It has excellent (sub-ns) speed, a state (256 bits) that is large
    enough for any parallel application, and it passes all tests we are
@@ -105,36 +104,32 @@ IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE. */
 
    The state must be seeded so that it is not everywhere zero. If you have
    a 64-bit seed, we suggest to seed a splitmix64 generator and use its
-   output to fill s. */
+   output to fill rng_state. */
 
 static inline uint64_t rotl(const uint64_t x, int k) {
     return (x << k) | (x >> (64 - k));
 }
 
+static uint64_t next(uint64_t rng_state[4]) {
+    const uint64_t result = rotl(rng_state[0] + rng_state[3], 23) + rng_state[0];
 
-//static uint64_t s[4]; -- removed for parallelism concerns
-// (all methods below will have `void` argument changed to uint64_t s[4])
+    const uint64_t t = rng_state[1] << 17;
 
-uint64_t next(uint64_t s[4]) {
-    const uint64_t result = rotl(s[0] + s[3], 23) + s[0];
+    rng_state[2] ^= rng_state[0];
+    rng_state[3] ^= rng_state[1];
+    rng_state[1] ^= rng_state[2];
+    rng_state[0] ^= rng_state[3];
 
-    const uint64_t t = s[1] << 17;
+    rng_state[2] ^= t;
 
-    s[2] ^= s[0];
-    s[3] ^= s[1];
-    s[1] ^= s[2];
-    s[0] ^= s[3];
-
-    s[2] ^= t;
-
-    s[3] = rotl(s[3], 45);
+    rng_state[3] = rotl(rng_state[3], 45);
 
     return result;
 }
 /* End of xoshiro256++ by Blackman and Vigna */
 
 // for seeding xoshiro256++
-uint64_t splitmix64(uint64_t *state) {
+static uint64_t splitmix64(uint64_t *state) {
     uint64_t z = (*state += 0x9e3779b97f4a7c15);
     z = (z ^ (z >> 30)) * 0xbf58476d1ce4e5b9;
     z = (z ^ (z >> 27)) * 0x94d049bb133111eb;
@@ -142,7 +137,7 @@ uint64_t splitmix64(uint64_t *state) {
 }
 
 // Fisher-Yates (shuffle list)
-void fisher_yates(int * lis, int len, uint64_t* rng_state) {
+static void fisher_yates(int * lis, int len, uint64_t* rng_state) {
     uint64_t j;
 
     for (int i=len-1; i>=0; --i) {
@@ -164,7 +159,7 @@ typedef struct {
 
 // MISC CUSTOM HELPERS
 // -------------------
-void insertion_sort(int *arr, int len) {
+static void insertion_sort(int *arr, int len) {
     for (int i = 1; i < len; i++) {
         int key = arr[i];
         int j = i - 1;
@@ -378,38 +373,6 @@ int pushing(
     int *num_simps
 )
 {
-    /*
-    **Description:**
-    Constructs a pushing triangulation/fan of the input vectors. Optionally,
-    - random or
-    - random & fine.
-    These configurations are set by user-specified arguments in PushingOpts.
-
-    **Arguments:**
-    - `vecs`:          The input vectors.
-    - `dim`:           The dimension of the vector configuration.
-    - `num_vecs`:      The number of vectors input.
-    // configuration
-    - `opts`:          Configuration for algorithm. Whether to output a
-                       triangulation using the input vector order, a random
-                       triangulation, or a random & fine triangulation.
-    // simplices objects
-    - `max_num_simps`: Max allowed number of simplices - to prevent writing out
-                       of simps container.
-    - `simps`:         OUTPUT: A container for the simplices.
-    - `num_simps`:     OUTPUT: The number of simplices written.
-
-    **Returns:**
-    A status code according to following list:
-        0:  success
-        -1: misconfigured options. If fine=1, need random=1.
-        -2: memory allocation problem
-        -3: 0 vector input
-        -4: couldn't find initial simplex
-        -5: deadlock state - couldn't add a new simplex
-        -6: constructed too many simplices
-        -100: error in splitting a cone - see code
-    */
     // input checking
     if (opts->fine && (opts->random == 0)) {
         return -1;
@@ -419,7 +382,7 @@ int pushing(
     // ---------------------
     // misc
     int return_code = 0;
-    uint64_t s[4]; // RNG state
+    uint64_t rng_state[4]; // RNG state
 
     // vc variables
     int num_labels = num_vecs;
@@ -480,16 +443,16 @@ int pushing(
 
     // seed the RNG
     // ------------
-    s[0] = splitmix64(&opts->seed);
-    s[1] = splitmix64(&opts->seed);
-    s[2] = splitmix64(&opts->seed);
-    s[3] = splitmix64(&opts->seed);
+    rng_state[0] = splitmix64(&opts->seed);
+    rng_state[1] = splitmix64(&opts->seed);
+    rng_state[2] = splitmix64(&opts->seed);
+    rng_state[3] = splitmix64(&opts->seed);
 
     // get an initial simplex
     // ----------------------
     // shuffle the labels using Fisher-Yates
     if (opts->random)
-        fisher_yates(labels, num_vecs, s);
+        fisher_yates(labels, num_vecs, rng_state);
 
     // begin with seed_simp = labels[0],labels[1],labels[2],...
     for (int i=0; i<dim; ++i) _inds[i] = i;
@@ -675,7 +638,7 @@ int pushing(
 
         // re-shuffle the (now trimmed) labels
         if (opts->random)
-            fisher_yates(labels, num_labels, s);
+            fisher_yates(labels, num_labels, rng_state);
 
         #if defined(DEBUG) || defined(VERBOSE)
         fprintf(stderr, "%d | %d\n", num_labels, *num_simps);
@@ -897,7 +860,7 @@ int pushing(
     // end goto
     // --------
     end:
-        opts->seed = next(s); // update the seed (in case multiple calls are made)
+        opts->seed = next(rng_state); // update the seed (in case multiple calls are made)
 
         free(_simps);
         free(visible_isimp);
