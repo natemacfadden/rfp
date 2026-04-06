@@ -131,76 +131,6 @@ uint64_t next(uint64_t s[4]) {
 
     return result;
 }
-
-
-/* This is the jump function for the generator. It is equivalent
-   to 2^128 calls to next(); it can be used to generate 2^128
-   non-overlapping subsequences for parallel computations. */
-
-void jump(uint64_t s[4]) {
-    static const uint64_t JUMP[] = {
-        0x180ec6d33cfd0aba,
-        0xd5a61266f0c9392c,
-        0xa9582618e03fc9aa,
-        0x39abdc4529b1661c
-    };
-
-    uint64_t s0 = 0;
-    uint64_t s1 = 0;
-    uint64_t s2 = 0;
-    uint64_t s3 = 0;
-    for(int i = 0; i < (int)(sizeof JUMP / sizeof *JUMP); i++)
-        for(int b = 0; b < 64; b++) {
-            if (JUMP[i] & UINT64_C(1) << b) {
-                s0 ^= s[0];
-                s1 ^= s[1];
-                s2 ^= s[2];
-                s3 ^= s[3];
-            }
-            next(s); 
-        }
-        
-    s[0] = s0;
-    s[1] = s1;
-    s[2] = s2;
-    s[3] = s3;
-}
-
-
-
-/* This is the long-jump function for the generator. It is equivalent to
-   2^192 calls to next(); it can be used to generate 2^64 starting points,
-   from each of which jump() will generate 2^64 non-overlapping
-   subsequences for parallel distributed computations. */
-
-void long_jump(uint64_t s[4]) {
-    static const uint64_t LONG_JUMP[] = {
-        0x76e15d3efefdcbbf,
-        0xc5004e441c522fb3,
-        0x77710069854ee241,
-        0x39109bb02acbe635
-    };
-
-    uint64_t s0 = 0;
-    uint64_t s1 = 0;
-    uint64_t s2 = 0;
-    uint64_t s3 = 0;
-    for(int i = 0; i < (int)(sizeof LONG_JUMP / sizeof *LONG_JUMP); i++)
-        for(int b = 0; b < 64; b++) {
-            if (LONG_JUMP[i] & UINT64_C(1) << b) {
-                s0 ^= s[0];
-                s1 ^= s[1];
-                s2 ^= s[2];
-                s3 ^= s[3];
-            }
-            next(s); 
-        }
-        
-    s[0] = s0;
-    s[1] = s1;
-    s[2] = s2;
-    s[3] = s3;
-}
 /* End of xoshiro256++ by Blackman and Vigna */
 
 // for seeding xoshiro256++
@@ -221,7 +151,19 @@ void fisher_yates(int * lis, int len, uint64_t* rng_state) {
     }
 }
 
-// insertion sort
+// PUSHING CODE
+// ============
+// HELPER DATA STRUCTURES
+// ----------------------
+typedef struct {
+    int labels[MAX_DIM];              // vertices of the simplex
+    int normals[MAX_DIM*MAX_DIM];     // inwards-facing normals
+    int external_facet_inds[MAX_DIM]; // indices of external facets... unsorted
+    int num_external_facets;
+} Simplex;
+
+// MISC CUSTOM HELPERS
+// -------------------
 void insertion_sort(int *arr, int len) {
     for (int i = 1; i < len; i++) {
         int key = arr[i];
@@ -234,19 +176,6 @@ void insertion_sort(int *arr, int len) {
     }
 }
 
-// REGFAN CODE
-// ===========
-// HELPER DATA STRUCTURES
-// ----------------------
-typedef struct {
-    int labels[MAX_DIM];              // vertices of the simplex
-    int normals[MAX_DIM*MAX_DIM];     // inwards-facing normals
-    int external_facet_inds[MAX_DIM]; // indices of external facets... unsorted
-    int num_external_facets;
-} Simplex;
-
-// MISC CUSTOM HELPERS
-// -------------------
 static int gcd(int a, int b) {
     a = abs(a); b = abs(b);
     while (b) { int t = b; b = a % b; a = t; }
