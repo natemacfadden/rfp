@@ -1,85 +1,35 @@
-# custom
-scratch/
-*.dat
-*.png
-
 # macOS
 .DS_Store
 .AppleDouble
 .LSOverride
 
-# Python
+# custom
+scratch/
+*.dat
+*.png
+
+# Byte-compiled / optimized / DLL files
 __pycache__/
-*.py[cod]
-*.pyo
-*.pyd
-.Python
-*.egg-info/
-dist/
+*.pyc
+
+# C extensions
+*.so
+
+# Cython-generated C files
+grow2d/src/grow2d.c
+
+# Distribution / packaging
 build/
-.eggs/
+dist/
+*.egg-info/
+*.egg
+
+# Environments
 .venv/
 venv/
+
+# Testing
 .pytest_cache/
+
+# Jupyter
 .ipynb_checkpoints/
-*.ipynb_checkpoints
-
-
-
-# C gitignore template (from GitHub)
-# ----------------------------------
-# Prerequisites
-*.d
-
-# Object files
-*.o
-*.ko
-*.obj
-*.elf
-
-# Linker output
-*.ilk
-*.map
-*.exp
-
-# Precompiled Headers
-*.gch
-*.pch
-
-# Libraries
-*.lib
-*.a
-*.la
-*.lo
-
-# Shared objects (inc. Windows DLLs)
-*.dll
-*.so
-*.so.*
-*.dylib
-
-# Executables
-*.exe
-*.out
-*.app
-*.i*86
-*.x86_64
-*.hex
-
-# Debug files
-*.dSYM/
-*.su
-*.idb
-*.pdb
-
-# Kernel Module Compile Results
-*.mod*
-*.cmd
-.tmp_versions/
-modules.order
-Module.symvers
-Mkfile.old
-dkms.conf
-
-# debug information files
-*.dwo
