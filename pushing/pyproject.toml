@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=61"]
+requires = ["setuptools>=64", "cython", "numpy"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -11,9 +11,16 @@ readme = "README.md"
 license = "GPL-3.0-or-later"
 requires-python = ">=3.9"
 
+dependencies = [
+    "numpy",
+]
+
 [project.optional-dependencies]
 test = [
     "pytest",
     "regfans",
     "numpy",
 ]
+
+[tool.setuptools]
+packages = ["pushing"]
