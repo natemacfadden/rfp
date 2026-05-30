@@ -26,7 +26,7 @@ No external dependencies for the core library — just a C compiler.
 
 Random fine triangulations of 2D lattice polygons. Originally implemented by me in
 [CYTools](https://github.com/LiamMcAllisterGroup/cytools);
-ported here as a standalone module. C backend planned.
+ported here as a standalone module with a compiled C backend.
 
 The algorithm starts from a random unimodular triangle, then iteratively
 extends the triangulation by choosing an exterior edge and finding a compatible

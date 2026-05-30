@@ -9,7 +9,7 @@ The core library. Implements `grow2d`, which grows a fine triangulation of a
 starting simplex, checking for edge intersections at each step.
 
 Ported from [CYTools](https://github.com/LiamMcAllisterGroup/cytools)
-(`cytools/ntfe/face_triangulations.py` @ `1e09ca4`). C backend planned.
+(`cytools/ntfe/face_triangulations.py` @ `1e09ca4`). The C backend lives in `grow2d.h`, wrapped by `grow2d.pyx`.
 
 ## geometry.py
 
